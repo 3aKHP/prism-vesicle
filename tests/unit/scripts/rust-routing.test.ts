@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { requirePinnedToolVersion, requireRustWorkspace, rustWorkspaceInputs, verifyRustWorkspace } from "../../../scripts/check/rust-workspace.ts";
+import { requirePinnedCompiler, requireRustWorkspace, rustWorkspaceInputs, verifyRustWorkspace } from "../../../scripts/check/rust-workspace.ts";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -80,9 +80,9 @@ describe.skipIf(process.platform === "win32")("review routing on real committed 
 
 describe("Rust CI applicability", () => {
   test("a successful command from another compiler cannot verify the declared pin", () => {
-    expect(() => requirePinnedToolVersion("rustc", "rustc 1.99.0 (fixture 2026-09-28)", "1.90.0")).toThrow("does not match pinned");
-    expect(() => requirePinnedToolVersion("cargo", "cargo 1.90.0-nightly (fixture)", "1.90.0")).toThrow("does not match pinned");
-    expect(() => requirePinnedToolVersion("rustc", "rustc 1.90.0 (fixture)\n", "1.90.0")).not.toThrow();
+    expect(() => requirePinnedCompiler("rustc 1.99.0 (fixture 2026-09-28)", "1.90.0")).toThrow("does not match pinned");
+    expect(() => requirePinnedCompiler("rustc 1.90.0-nightly (fixture)", "1.90.0")).toThrow("does not match pinned");
+    expect(() => requirePinnedCompiler("rustc 1.90.0 (fixture)\n", "1.90.0")).not.toThrow();
   });
   test("source, dependency and build inputs require a pinned root workspace at any depth", () => {
     expect(requireRustWorkspace(["src/index.ts", "docs/rust.md"])).toBe(false);
@@ -106,5 +106,45 @@ describe("Rust CI applicability", () => {
     await expect(verifyRustWorkspace(root, true)).rejects.toThrow("rustfmt and clippy");
     await Bun.write(join(root, "rust-toolchain.toml"), '[toolchain]\nchannel = "1.90.0"\ncomponents = ["rustfmt", "clippy"]\n');
     expect(await verifyRustWorkspace(root, true)).toBe(true);
+  });
+
+  test.skipIf(process.platform === "win32")("all execution phases select the pin despite inherited overrides and independent Cargo numbering", async () => {
+    const root = await repository();
+    await Bun.write(join(root, "Cargo.toml"), '[package]\nname="fixture"\nversion="0.0.0"\n');
+    await Bun.write(join(root, "Cargo.lock"), "# command-routing fixture\n");
+    await Bun.write(join(root, "rust-toolchain.toml"), '[toolchain]\nchannel="1.56.1"\ncomponents=["rustfmt","clippy"]\n');
+    git(root, "add", ".");
+    const bin = join(root, "bin");
+    const log = join(root, "calls.jsonl");
+    const metadata = { packages: [{ id: "fixture", manifest_path: join(root, "Cargo.toml") }], workspace_members: ["fixture"] };
+    // This process fixture protects selection at the command boundary; it does
+    // not stand in for real compilation. Direct cargo is deliberately poisoned.
+    await Bun.write(join(bin, "cargo"), `#!${process.execPath}\nprocess.exit(99);\n`);
+    await Bun.write(join(bin, "rustup"), `#!${process.execPath}
+import { appendFileSync } from "node:fs";
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(log)}, JSON.stringify(args) + "\\n");
+if (args[0] !== "run" || args[1] !== "1.56.1") process.exit(98);
+if (args[2] === "rustc") console.log("rustc 1.56.1 (fixture)");
+else if (args[3] === "--version") console.log("cargo 1.56.0 (4ed5d137b 2021-10-04)");
+else if (args[3] === "metadata") console.log(${JSON.stringify(JSON.stringify(metadata))});
+`);
+    await chmod(join(bin, "cargo"), 0o755);
+    await chmod(join(bin, "rustup"), 0o755);
+    const child = Bun.spawn([process.execPath, resolve("scripts/check/rust-workspace.ts")], {
+      cwd: root, env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RUSTUP_TOOLCHAIN: "stable" },
+      stdout: "pipe", stderr: "pipe",
+    });
+    const [stdout, stderr, exit] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+    expect({ exit, stderr }).toEqual({ exit: 0, stderr: "" });
+    expect(stdout).toContain("verification passed");
+    const calls: string[][] = (await Bun.file(log).text()).trim().split("\n").map((line) => JSON.parse(line));
+    expect(calls.every((args) => args[0] === "run" && args[1] === "1.56.1")).toBe(true);
+    expect(calls.filter((args) => args[2] === "cargo").map((args) => args.slice(3))).toEqual([
+      ["metadata", "--no-deps", "--locked", "--format-version", "1"],
+      ["fmt", "--all", "--", "--check"],
+      ["clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"],
+      ["test", "--workspace", "--all-targets", "--locked"],
+    ]);
   });
 });

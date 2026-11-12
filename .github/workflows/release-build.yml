@@ -64,7 +64,7 @@ jobs:
       - name: Verify Rust workspace (when present)
         if: steps.rust.outputs.enabled == 'true'
         timeout-minutes: 15
-        run: bun scripts/check/rust-workspace.ts
+        run: bun scripts/check/rust-workspace.ts --install-toolchain
       - name: Execute and compare TS migration oracles
         run: |
           bun scripts/smoke/migration/main.ts . "$RUNNER_TEMP/vesicle-oracle-a"

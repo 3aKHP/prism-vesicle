@@ -14,9 +14,9 @@ export function requireRustWorkspace(files: string[]): boolean {
   return true;
 }
 
-export function requirePinnedToolVersion(tool: "rustc" | "cargo", version: string, pin: string): void {
-  if (!version.startsWith(`${tool} ${pin} (`)) {
-    throw new Error(`Effective ${tool} does not match pinned ${pin}: ${version.trim()}. Remove conflicting toolchain overrides.`);
+export function requirePinnedCompiler(version: string, pin: string): void {
+  if (!version.startsWith(`rustc ${pin} (`)) {
+    throw new Error(`Effective rustc does not match pinned ${pin}: ${version.trim()}. Remove conflicting toolchain overrides.`);
   }
 }
 
@@ -27,7 +27,7 @@ async function command(root: string, args: string[], capture = false): Promise<s
   return output;
 }
 
-export async function verifyRustWorkspace(root: string, detectOnly = false): Promise<boolean> {
+export async function verifyRustWorkspace(root: string, detectOnly = false, installToolchain = false): Promise<boolean> {
   const files = (await command(root, ["git", "ls-files", "-z"], true)).split("\0").filter(Boolean);
   if (!requireRustWorkspace(files)) return false;
   const toolchain = Bun.TOML.parse(await Bun.file(resolve(root, "rust-toolchain.toml")).text());
@@ -40,13 +40,14 @@ export async function verifyRustWorkspace(root: string, detectOnly = false): Pro
     throw new Error("rust-toolchain.toml must request rustfmt and clippy components.");
   }
   if (detectOnly) return true;
-  // Directory and environment overrides must not turn a different compiler's
-  // successful run into evidence for the declared pin.
-  for (const tool of ["rustc", "cargo"] as const) {
-    requirePinnedToolVersion(tool, await command(root, [tool, "--version"], true), settings.channel);
-  }
+  if (installToolchain) await command(root, ["rustup", "toolchain", "install", settings.channel, "--profile", "minimal", "--component", "rustfmt", "--component", "clippy"]);
+  // Select the distribution explicitly, overriding directory/environment state.
+  // Cargo has its own component version: e.g. Rust 1.56.1 ships Cargo 1.56.0.
+  const pinned = ["rustup", "run", settings.channel];
+  requirePinnedCompiler(await command(root, [...pinned, "rustc", "--version"], true), settings.channel);
+  const cargo = [...pinned, "cargo"];
   // --workspace would otherwise silently ignore a second, unlisted crate.
-  const metadata: unknown = JSON.parse(await command(root, ["cargo", "metadata", "--no-deps", "--locked", "--format-version", "1"], true));
+  const metadata: unknown = JSON.parse(await command(root, [...cargo, "metadata", "--no-deps", "--locked", "--format-version", "1"], true));
   if (!metadata || typeof metadata !== "object" || !("packages" in metadata) || !Array.isArray(metadata.packages) || !("workspace_members" in metadata) || !Array.isArray(metadata.workspace_members)) {
     throw new Error("Cargo metadata omitted workspace membership.");
   }
@@ -59,16 +60,16 @@ export async function verifyRustWorkspace(root: string, detectOnly = false): Pro
   for (const file of files.filter((path) => path.endsWith("/Cargo.toml"))) {
     if (!manifests.has(file)) throw new Error(`Tracked manifest outside the verified workspace: ${file}`);
   }
-  await command(root, ["cargo", "fmt", "--all", "--", "--check"]);
-  await command(root, ["cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"]);
-  await command(root, ["cargo", "test", "--workspace", "--all-targets", "--locked"]);
+  await command(root, [...cargo, "fmt", "--all", "--", "--check"]);
+  await command(root, [...cargo, "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"]);
+  await command(root, [...cargo, "test", "--workspace", "--all-targets", "--locked"]);
   return true;
 }
 
 if (import.meta.main) {
   const detectOnly = process.argv.includes("--detect");
   try {
-    const enabled = await verifyRustWorkspace(process.cwd(), detectOnly);
+    const enabled = await verifyRustWorkspace(process.cwd(), detectOnly, process.argv.includes("--install-toolchain"));
     if (detectOnly && process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `enabled=${enabled}\n`);
     console.log(enabled ? (detectOnly ? "Rust workspace detected; execution required." : "Rust workspace verification passed.") : "SKIP: no tracked Rust workspace inputs; no Cargo validation performed.");
   } catch (error) {
