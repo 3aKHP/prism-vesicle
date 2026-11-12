@@ -20,22 +20,16 @@ if [ "$committed_ok" -eq 1 ] && [ -n "$mb_out" ]; then
   mb="$mb_out"
 fi
 
-# Collect the changed file set (committed branch diff only — the same set the
-# deep-cr finders review via `git diff $(git merge-base HEAD <base>) HEAD`). The
-# gate and the review must evaluate the same scope, so staged/unstaged changes
-# are NOT included. Capture via command substitution, not a pipeline into a
-# function — bash runs pipeline commands in a subshell and would lose the value.
-changed_raw=""
+# The gate and finders evaluate committed branch diffs only. Read NUL-delimited
+# paths so Git quoting and embedded newlines cannot hide a Rust/build suffix.
+changed_files=()
 # Disable rename collapsing so moving code out of a guarded path still reviews
 # its old domain, and renaming Rust to another suffix cannot evade the gate.
-if [ -n "$mb" ]; then changed_raw="${changed_raw}$(git -c core.quotePath=false diff --no-renames --name-only "$mb" HEAD 2>/dev/null)"$'\n'; fi
-
-# distinct file list + count
-distinct_files=$(printf '%s' "$changed_raw" | grep . | sort -u)
-file_count=0
-if [ -n "$distinct_files" ]; then
-  file_count=$(printf '%s\n' "$distinct_files" | grep -c .)
+if [ -n "$mb" ]; then
+  while IFS= read -r -d '' file; do changed_files+=("$file"); done \
+    < <(git diff --no-renames --name-only -z "$mb" HEAD 2>/dev/null)
 fi
+file_count=${#changed_files[@]}
 
 # ---- map a path to its high-risk domain category (or empty) ------------------
 # Mirrors LENSES[].prefixes in .claude/workflows/deep-cr.js and the list in
@@ -57,8 +51,8 @@ classify() {
 
 # distinct categories touched
 categories=""
-if [ -n "$distinct_files" ]; then
-  categories=$(printf '%s\n' "$distinct_files" | while IFS= read -r f; do classify "$f"; done | grep . | sort -u)
+if [ "$file_count" -gt 0 ]; then
+  categories=$(for f in "${changed_files[@]}"; do classify "$f"; done | grep . | sort -u)
 fi
 category_count=0
 if [ -n "$categories" ]; then

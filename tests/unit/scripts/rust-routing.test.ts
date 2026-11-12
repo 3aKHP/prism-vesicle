@@ -58,6 +58,16 @@ describe.skipIf(process.platform === "win32")("review routing on real committed 
     }
   });
 
+  test("Git-quoted paths cannot hide Rust inputs", async () => {
+    for (const path of ['crates/a"b/src/lib.rs', "crates/a\tb/Cargo.toml", "crates/a\nb/.cargo/config.toml"]) {
+      const root = await repository();
+      await Bun.write(join(root, path), "fixture\n");
+      git(root, "add", ".");
+      git(root, "commit", "-m", "quoted input");
+      expect(reviewGate(root).trigger).toBe(true);
+    }
+  });
+
   test("TS-only small changes retain Tier 1; unresolved base cannot grant an exemption", async () => {
     const root = await repository();
     await Bun.write(join(root, "src/providers/new.ts"), "export const value = 1;\n");
