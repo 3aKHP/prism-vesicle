@@ -73,6 +73,10 @@ jobs:
           bun scripts/smoke/migration/main.ts . "$RUNNER_TEMP/vesicle-oracle-b"
           bun scripts/smoke/migration/compare.ts "$RUNNER_TEMP/vesicle-oracle-a" "$RUNNER_TEMP/vesicle-oracle-b"
           bun scripts/smoke/migration/self-check.ts "$RUNNER_TEMP/vesicle-oracle-a"
+          bun scripts/smoke/migration/corpus.ts . "$RUNNER_TEMP/vesicle-oracle-corpus-a"
+          bun scripts/smoke/migration/corpus.ts . "$RUNNER_TEMP/vesicle-oracle-corpus-b"
+          bun scripts/smoke/migration/corpus-compare.ts "$RUNNER_TEMP/vesicle-oracle-corpus-a" "$RUNNER_TEMP/vesicle-oracle-corpus-b"
+          bun scripts/smoke/migration/corpus-self-check.ts "$RUNNER_TEMP/vesicle-oracle-corpus-a"
       - uses: actions/upload-artifact@v7
         if: always()
         with:

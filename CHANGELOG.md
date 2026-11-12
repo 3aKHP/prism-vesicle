@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **Synthetic session compatibility corpus.** Retained original trees and independent expectations cover legacy and branched history, candidate snapshots, compaction, attachments, migration and frozen Skills, pending interactions, background tasks and quality decisions. Isolated TS readers preserve original data, and CI rejects corrupted or incomplete replay evidence.
 - **Retained TS release-resource probe.** A bounded Linux/WSL PTY script records binary size, warm command/startup timings, process-tree memory, streaming, cancellation and synthetic long-history resume with raw evidence. It uses only a local provider and keeps unavailable platform and cold-cache measurements explicit.
 - **Rust review and CI routing.** Rust source and build changes at any depth now require all five deep-review lenses, including small diffs and removals. CI refuses incomplete or unlisted workspaces and runs locked formatting, Clippy and tests when a pinned root workspace exists; absent Rust is explicitly skipped.
 - **Reproducible TS migration oracles.** A source-level entry scanner exposes commands, tools, configuration and durable-kind candidates for reviewed classification. Five isolated TS scenarios now retain wire, transcript, file and command evidence for tool execution, process-restarted gate continuation, candidate restoration, atomic configuration changes and path rejection. CI compares two executions and proves that damaged evidence and changed behavior are rejected.

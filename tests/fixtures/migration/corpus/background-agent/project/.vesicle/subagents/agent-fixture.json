@@ -1,0 +1,16 @@
+{
+  "runId": "agent-fixture",
+  "handle": "researcher-1",
+  "profileId": "researcher",
+  "description": "synthetic background Agent",
+  "prompt": "synthetic",
+  "mode": "background",
+  "parentSessionId": "fixture",
+  "parentToolCallId": "call-agent",
+  "status": "completed",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "childSessionId": "child-fixture",
+  "result": "synthetic research",
+  "toolUses": 0
+}

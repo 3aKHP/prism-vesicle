@@ -1,0 +1,12 @@
+{
+  ".vesicle/": "directory",
+  ".vesicle/file-history/": "directory",
+  ".vesicle/file-history/fixture/": "directory",
+  ".vesicle/file-history/fixture/backups/": "directory",
+  ".vesicle/file-history/fixture/backups/b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060": "b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060",
+  ".vesicle/file-history/fixture/backups/f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad": "f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad",
+  ".vesicle/sessions/": "directory",
+  ".vesicle/sessions/fixture.jsonl": "268bbfefad2ea3f2f98a5f8f91b7edce3560c08c13f96b234add3fa516440a59",
+  "workspace/": "directory",
+  "workspace/candidate.txt": "b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060"
+}

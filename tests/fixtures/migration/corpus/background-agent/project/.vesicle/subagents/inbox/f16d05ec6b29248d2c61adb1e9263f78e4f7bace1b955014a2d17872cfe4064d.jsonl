@@ -1,0 +1,3 @@
+{"type": "enqueued", "ts": "2026-01-01T00:00:00.000Z", "entry": {"inboxId": "inbox-fixture", "parentSessionId": "fixture", "runId": "agent-fixture", "handle": "researcher-1", "profileId": "researcher", "description": "synthetic background Agent", "status": "completed", "content": "synthetic research", "childSessionId": "child-fixture", "createdAt": "2026-01-01T00:00:00.000Z", "state": "pending"}}
+{"type": "state", "ts": "2026-01-01T00:00:00.000Z", "inboxId": "inbox-fixture", "state": "delivered"}
+{"type": "state", "ts": "2026-01-01T00:00:00.000Z", "inboxId": "inbox-fixture", "state": "acknowledged"}

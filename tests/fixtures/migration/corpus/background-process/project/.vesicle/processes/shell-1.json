@@ -1,0 +1,27 @@
+{
+  "taskId": "shell-1",
+  "parentSessionId": "fixture",
+  "parentToolCallId": "call-background",
+  "plan": {
+    "command": "printf done",
+    "cwd": ".",
+    "shell": "posix-sh",
+    "timeoutMs": 120000,
+    "envPolicyVersion": 1
+  },
+  "status": "completed",
+  "startedAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "completedAt": "2026-01-01T00:00:00.000Z",
+  "exitCode": 0,
+  "durationMs": 10,
+  "stdout": "done",
+  "stderr": "",
+  "stdoutTail": "done",
+  "stderrTail": "",
+  "stdoutBytes": 4,
+  "stderrBytes": 0,
+  "stdoutTruncated": false,
+  "stderrTruncated": false,
+  "notified": true
+}

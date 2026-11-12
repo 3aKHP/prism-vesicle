@@ -1,0 +1,11 @@
+{
+  ".agents/": "directory",
+  ".agents/skills/": "directory",
+  ".agents/skills/fixture-skill/": "directory",
+  ".agents/skills/fixture-skill/SKILL.md": "60c2424768f98b6b71cc53233589743942f51777289249edbace6e76ae1b90d7",
+  ".vesicle/": "directory",
+  ".vesicle/sessions/": "directory",
+  ".vesicle/sessions/archive/": "directory",
+  ".vesicle/sessions/archive/fixture-original.jsonl": "10b02676f3a3e2d6129667696a077fcfc0525b82fd86b8d4ef3708b3079b017c",
+  ".vesicle/sessions/fixture.jsonl": "d3bd837df34a7fd675a9afecbb66af2b575ebc24a3d5380a9de0386e6a866112"
+}

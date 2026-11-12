@@ -1,0 +1,5 @@
+{"uuid": "r0", "parentUuid": null, "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "system", "content": "prompt"}
+{"uuid": "r1", "parentUuid": "r0", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "user", "content": "research"}
+{"uuid": "r2", "parentUuid": "r1", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "assistant", "content": "", "metadata": {"toolCalls": [{"id": "call-agent", "name": "spawn_agent", "arguments": "{\"profile\":\"researcher\",\"prompt\":\"synthetic\",\"mode\":\"background\"}"}]}}
+{"uuid": "r3", "parentUuid": "r2", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "tool", "content": "{\"ok\":true,\"result\":\"started\"}", "metadata": {"toolCallId": "call-agent", "ok": true}}
+{"uuid": "r4", "parentUuid": "r3", "sessionId": "fixture", "ts": "2026-01-01T00:00:00.000Z", "role": "user", "content": "[subagent_results]\nsynthetic research\n[/subagent_results]", "metadata": {"kind": "subagent-results"}}

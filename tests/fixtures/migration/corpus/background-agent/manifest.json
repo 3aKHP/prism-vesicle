@@ -1,0 +1,10 @@
+{
+  ".vesicle/": "directory",
+  ".vesicle/sessions/": "directory",
+  ".vesicle/sessions/child-fixture.jsonl": "24f6366392b117809b0d8e5f1e7bdf112874e743fe41389931dc34425cd6753d",
+  ".vesicle/sessions/fixture.jsonl": "22bb0e86db34e2fcae406c6679b107e2828d66c7684a25369c98486b3c12d9b4",
+  ".vesicle/subagents/": "directory",
+  ".vesicle/subagents/agent-fixture.json": "df206cc62024cd5cf2ef7b788193b5f281a3a810297765ee7dcca8ffca6a1a23",
+  ".vesicle/subagents/inbox/": "directory",
+  ".vesicle/subagents/inbox/f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d.jsonl": "f553a63213a573d7e0f16ebee29c12109bfb81efb9006561f30957b992f09ea8"
+}

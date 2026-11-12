@@ -1,0 +1,1016 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "legacy-linear",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "contents"
+          ],
+          "equals": [
+            "old question",
+            "old answer"
+          ]
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "messages",
+            "1",
+            "providerState"
+          ],
+          "equals": {
+            "version": 1,
+            "protocol": "fixture-responses",
+            "providerId": "fixture-provider",
+            "model": "fixture-model",
+            "endpointFingerprint": "sha256:fixture-endpoint",
+            "payload": {
+              "encrypted": "opaque\n+/=signature",
+              "outputItems": []
+            }
+          }
+        },
+        {
+          "path": [
+            "recordCount"
+          ],
+          "equals": 3
+        }
+      ],
+      "expectedError": null,
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "nested-candidates",
+      "sessionId": "fixture",
+      "heads": [
+        "a2",
+        "b2"
+      ],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "contents"
+          ],
+          "equals": [
+            "outline",
+            "beta",
+            "expand beta",
+            "beta two"
+          ]
+        },
+        {
+          "path": [
+            "views",
+            "a2",
+            "contents"
+          ],
+          "equals": [
+            "outline",
+            "alpha",
+            "expand alpha",
+            "alpha two"
+          ]
+        },
+        {
+          "path": [
+            "candidateTree",
+            "0",
+            "candidates",
+            "0",
+            "rootUuid"
+          ],
+          "equals": "a"
+        },
+        {
+          "path": [
+            "candidateTree",
+            "0",
+            "candidates",
+            "0",
+            "fork",
+            "candidates",
+            "1",
+            "rootUuid"
+          ],
+          "equals": "a2"
+        },
+        {
+          "path": [
+            "candidateTree",
+            "0",
+            "candidates",
+            "1",
+            "fork",
+            "candidates",
+            "1",
+            "rootUuid"
+          ],
+          "equals": "b2"
+        },
+        {
+          "path": [
+            "recordCount"
+          ],
+          "equals": 10
+        }
+      ],
+      "expectedError": null,
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "compact-state",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "contents"
+          ],
+          "equals": [
+            "[conversation summary]\nEarlier work.",
+            "retained answer",
+            "new question",
+            "new answer"
+          ]
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "messages",
+            "1",
+            "providerState"
+          ],
+          "equals": {
+            "version": 1,
+            "protocol": "fixture-responses",
+            "providerId": "fixture-provider",
+            "model": "fixture-model",
+            "endpointFingerprint": "sha256:fixture-endpoint",
+            "payload": {
+              "encrypted": "opaque\n+/=signature",
+              "outputItems": []
+            }
+          }
+        },
+        {
+          "path": [
+            "recordCount"
+          ],
+          "equals": 6
+        }
+      ],
+      "expectedError": null,
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "unsupported-compact-version",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [],
+      "expectedError": {
+        "name": "Error",
+        "messageIncludes": "version 99 is not supported"
+      },
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "malformed-json",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [],
+      "expectedError": {
+        "name": "SyntaxError"
+      },
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "attachment",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": true,
+      "readAgents": false,
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "messages",
+            "0",
+            "images"
+          ],
+          "equals": [
+            {
+              "id": "img_637f66e34e99",
+              "path": ".vesicle/attachments/637f66e34e99be0b59ed7f800503edc085a03ac8d65b7ca30a7187d3d7ce0f42.png",
+              "mediaType": "image/png",
+              "bytes": 68,
+              "sha256": "637f66e34e99be0b59ed7f800503edc085a03ac8d65b7ca30a7187d3d7ce0f42",
+              "source": "clipboard",
+              "filename": "synthetic.png"
+            }
+          ]
+        },
+        {
+          "path": [
+            "materializedHashes"
+          ],
+          "equals": [
+            "637f66e34e99be0b59ed7f800503edc085a03ac8d65b7ca30a7187d3d7ce0f42"
+          ]
+        }
+      ],
+      "expectedError": null,
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "missing-attachment",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": true,
+      "readAgents": false,
+      "assertions": [],
+      "expectedError": {
+        "code": "ENOENT"
+      },
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "corrupt-attachment",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": true,
+      "readAgents": false,
+      "assertions": [],
+      "expectedError": {
+        "name": "Error",
+        "messageIncludes": "Image attachment changed on disk"
+      },
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "migration-skill-host-state",
+      "sessionId": "fixture",
+      "heads": [
+        "r2"
+      ],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "harness"
+          ],
+          "equals": {
+            "packId": "prism-engine-v10",
+            "packVersion": "10.3.3",
+            "sourceCommit": "synthetic-fixture",
+            "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "adapterId": "vesicle-v1",
+            "adapterVersion": "1.2.0",
+            "adapterHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        },
+        {
+          "path": [
+            "views",
+            "r2",
+            "snapshot",
+            "harness"
+          ],
+          "equals": {
+            "packId": "prism-engine-v10",
+            "packVersion": "10.3.3",
+            "sourceCommit": "synthetic-fixture",
+            "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "adapterId": "vesicle-v1",
+            "adapterVersion": "1.2.0",
+            "adapterHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        },
+        {
+          "path": [
+            "views",
+            "r2",
+            "snapshot",
+            "skillCatalogSnapshot"
+          ],
+          "equals": {
+            "catalogHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "entries": [
+              {
+                "name": "fixture-skill",
+                "scope": "project",
+                "bodySha256": "55258974a5d4a4391f9c1c0d840740aebc6e4d1ac870c58ebbb5ee955f1986b4"
+              }
+            ],
+            "omittedCount": 0,
+            "diagnosticsCount": 0
+          }
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "contents"
+          ],
+          "equals": [
+            "pre-migration question",
+            "regenerated pre-migration answer"
+          ]
+        },
+        {
+          "path": [
+            "views",
+            "r2",
+            "contents"
+          ],
+          "equals": [
+            "pre-migration question",
+            "pre-migration answer"
+          ]
+        },
+        {
+          "path": [
+            "skillFiles",
+            "0",
+            "bodySha256"
+          ],
+          "equals": "55258974a5d4a4391f9c1c0d840740aebc6e4d1ac870c58ebbb5ee955f1986b4"
+        }
+      ],
+      "expectedError": null,
+      "skillPaths": [
+        ".agents/skills/fixture-skill"
+      ],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "pending-gate",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "pendingGate",
+            "toolCallId"
+          ],
+          "equals": "call-pending"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "pendingGate",
+            "gate",
+            "gate"
+          ],
+          "equals": "blueprint-confirmation"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "contents"
+          ],
+          "equals": [
+            "request",
+            "pending"
+          ]
+        }
+      ],
+      "expectedError": null,
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "pending-question",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "pendingUserQuestion",
+            "toolCallId"
+          ],
+          "equals": "call-pending"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "pendingUserQuestion",
+            "question",
+            "header"
+          ],
+          "equals": "Scope"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "contents"
+          ],
+          "equals": [
+            "request",
+            "pending"
+          ]
+        }
+      ],
+      "expectedError": null,
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "pending-engine-switch",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "pendingEngineSwitch",
+            "toolCallId"
+          ],
+          "equals": "call-pending"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "pendingEngineSwitch",
+            "request",
+            "targetEngine"
+          ],
+          "equals": "runtime"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "contents"
+          ],
+          "equals": [
+            "request",
+            "pending"
+          ]
+        }
+      ],
+      "expectedError": null,
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "pending-permission",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "pendingPermission",
+            "id"
+          ],
+          "equals": "permission-shell"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "permissionMode"
+          ],
+          "equals": "MOMENTUM"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "contents"
+          ],
+          "equals": [
+            "run synthetic",
+            ""
+          ]
+        }
+      ],
+      "expectedError": null,
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "indeterminate-process",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "messages",
+            "2",
+            "kind"
+          ],
+          "equals": "process-indeterminate"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "messages",
+            "2",
+            "toolOk"
+          ],
+          "equals": false
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "messages",
+            "2",
+            "toolCallId"
+          ],
+          "equals": "call-shell"
+        }
+      ],
+      "expectedError": null,
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "pending-quality",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "pendingQualityRewrite",
+            "producer"
+          ],
+          "equals": "runtime"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "pendingQualityRewrite",
+            "attempts"
+          ],
+          "equals": 1
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "pendingQualityRewrite",
+            "candidateParts"
+          ],
+          "equals": [
+            "synthetic pending prose"
+          ]
+        }
+      ],
+      "expectedError": null,
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "background-agent",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": true,
+      "readProcesses": false,
+      "skillPaths": [],
+      "assertions": [
+        {
+          "path": [
+            "agents",
+            "0",
+            "handle"
+          ],
+          "equals": "researcher-1"
+        },
+        {
+          "path": [
+            "agents",
+            "0",
+            "status"
+          ],
+          "equals": "completed"
+        },
+        {
+          "path": [
+            "inbox",
+            "0",
+            "state"
+          ],
+          "equals": "acknowledged"
+        },
+        {
+          "path": [
+            "inbox",
+            "0",
+            "content"
+          ],
+          "equals": "synthetic research"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "messages",
+            "3",
+            "kind"
+          ],
+          "equals": "subagent-results"
+        }
+      ],
+      "expectedError": null,
+      "candidateLeaves": []
+    },
+    {
+      "id": "background-process",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "readProcesses": true,
+      "skillPaths": [],
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "messages",
+            "2",
+            "toolProcessEvent",
+            "status"
+          ],
+          "equals": "completed"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "messages",
+            "2",
+            "toolProcessEvent",
+            "stdoutTail"
+          ],
+          "equals": "done"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "messages",
+            "3",
+            "role"
+          ],
+          "equals": "user"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "messages",
+            "3",
+            "kind"
+          ],
+          "equals": "background-process-results"
+        },
+        {
+          "path": [
+            "processes",
+            "0",
+            "notified"
+          ],
+          "equals": true
+        },
+        {
+          "path": [
+            "processes",
+            "0",
+            "status"
+          ],
+          "equals": "completed"
+        }
+      ],
+      "expectedError": null,
+      "candidateLeaves": []
+    },
+    {
+      "id": "candidate-file-history",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "readProcesses": false,
+      "skillPaths": [],
+      "candidateLeaves": [
+        "142a72a6-dd6a-4977-ae99-ea96aa7789e1",
+        "f5cd158a-acd7-49c3-a8d2-9caa972ff67a"
+      ],
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "contents"
+          ],
+          "equals": [
+            "Write the synthetic candidate artifact.",
+            "",
+            "{\"ok\":true,\"result\":\"Wrote workspace/candidate.txt\"}",
+            "Candidate alpha."
+          ]
+        },
+        {
+          "path": [
+            "candidateBundles",
+            "0",
+            "version"
+          ],
+          "equals": 2
+        },
+        {
+          "path": [
+            "candidateBundles",
+            "1",
+            "version"
+          ],
+          "equals": 2
+        },
+        {
+          "path": [
+            "candidateBundles",
+            "0",
+            "files",
+            "workspace/candidate.txt",
+            "backup"
+          ],
+          "equals": "b6a98d9ce9a2d9149288fa3df42d377c3e42737afdcdaf714e33c0a100b51060"
+        },
+        {
+          "path": [
+            "candidateBundles",
+            "1",
+            "files",
+            "workspace/candidate.txt",
+            "backup"
+          ],
+          "equals": "f2c82decdd7181cf98945929a62598db7e6b477e11f6e0eb0ae97020eff151ad"
+        },
+        {
+          "path": [
+            "recordCount"
+          ],
+          "equals": 17
+        }
+      ],
+      "expectedError": null
+    },
+    {
+      "id": "quality-decision",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "readProcesses": false,
+      "skillPaths": [],
+      "candidateLeaves": [],
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "pendingQualityDecision",
+            "request",
+            "id"
+          ],
+          "equals": "quality-fixture"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "pendingQualityDecision",
+            "candidate",
+            "content"
+          ],
+          "equals": "synthetic pending prose"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "contents"
+          ],
+          "equals": [
+            "draft"
+          ]
+        }
+      ],
+      "expectedError": null
+    },
+    {
+      "id": "quality-accepted",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "readProcesses": false,
+      "skillPaths": [],
+      "candidateLeaves": [],
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "qualityWarnings",
+            "0",
+            "targets",
+            "0",
+            "resolution"
+          ],
+          "equals": "accepted-by-user"
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "pendingQuality"
+          ],
+          "equals": false
+        }
+      ],
+      "expectedError": null
+    },
+    {
+      "id": "unsupported-provider-state",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [],
+      "expectedError": {
+        "name": "Error",
+        "messageIncludes": "version 99 is not supported"
+      },
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    },
+    {
+      "id": "optional-quality-state",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "readProcesses": false,
+      "skillPaths": [],
+      "candidateLeaves": [],
+      "assertions": [
+        {
+          "path": [
+            "views",
+            "default",
+            "pendingQuality"
+          ],
+          "equals": false
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "contents"
+          ],
+          "equals": [
+            "draft"
+          ]
+        },
+        {
+          "path": [
+            "views",
+            "default",
+            "snapshot",
+            "qualityWarnings",
+            "0",
+            "id"
+          ],
+          "equals": "quality-fixture"
+        }
+      ],
+      "expectedError": null
+    },
+    {
+      "id": "malformed-migration",
+      "sessionId": "fixture",
+      "heads": [],
+      "materializeImages": false,
+      "readAgents": false,
+      "assertions": [],
+      "expectedError": {
+        "name": "Error",
+        "messageIncludes": "identity must be an object"
+      },
+      "skillPaths": [],
+      "readProcesses": false,
+      "candidateLeaves": []
+    }
+  ]
+}
