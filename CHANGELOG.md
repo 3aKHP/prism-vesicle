@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **Development-only migration evidence checks.** A versioned capability/scenario interchange, clean TS baseline scanner and stage checker reject missing inventory, source drift, corrupted artifacts, skipped-as-passed results and unobserved human gates. Reviewed coverage and regression definitions remain separate from execution reports; synthetic corruption tests exercise the rejection paths. Usage and evidence boundaries are documented under `tests/fixtures/migration/README.md`.
 - **Inline fallback for Responses remote compaction (#328).** When the standalone `/responses/compact` endpoint answers HTTP 404, the `openai-responses` adapter retries the same source window as a unary `POST /responses` request whose input ends with a `compaction_trigger` sentinel. The negotiated variant is remembered per provider/model/endpoint/profile owner for the process lifetime, the trigger never enters session records or replay, and the compacted window and envelope semantics are identical to the standalone form. Any non-404 standalone failure stays terminal, and a failure of both forms reports both attempts. Official `api.openai.com` behavior is unchanged; the new manual `test:acceptance:responses:compact-v2` lane records third-party backend compatibility.
 
 ### Fixed

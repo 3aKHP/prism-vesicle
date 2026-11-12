@@ -10,6 +10,7 @@
 
 ### 新增
 
+- **新增仅供开发使用的迁移证据检查。** 版本化能力/场景交换格式、干净 TS 基线扫描器与阶段检查器可拒绝缺失盘点项、源码漂移、产物损坏、把跳过当作通过及未观察的人工门。已审阅的覆盖与回归定义独立于执行报告；合成损坏测试实际执行拒绝路径。使用方法与证据边界见 `tests/fixtures/migration/README.md`。
 - **Responses 远程压缩的内联回退（#328）。** 当独立 `/responses/compact` 端点返回 HTTP 404 时,`openai-responses` 适配器会把同一源窗口改为一元 `POST /responses` 请求重试,input 末尾追加 `compaction_trigger` 哨兵项。协商结果按 provider/model/endpoint/profile 属主在进程生命周期内记忆;哨兵项绝不进入会话记录或回放;压缩窗口与信封语义与独立形式完全一致。非 404 的独立端点失败保持原样终止;两种形式都失败时报错同时提及两次尝试。官方 `api.openai.com` 行为不变;新增手动 `test:acceptance:responses:compact-v2` lane 记录第三方后端兼容性。
 
 ### 修复
