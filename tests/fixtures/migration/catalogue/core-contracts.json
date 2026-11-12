@@ -1190,7 +1190,7 @@
         "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
       ],
       "exercise": "Reconnect through same/cross-origin redirects; forbidden destinations receive no secrets and retry errors remain sanitized.",
-      "negativeCase": "A cross-origin redirect receives authentication headers/body or a reconnect error exposes a secret URL."
+      "negativeCase": "A forbidden redirect destination receives authentication headers/body or a reconnect error exposes a secret URL; same-origin redirects and same-host default-port HTTP-to-HTTPS upgrades remain allowed."
     },
     {
       "id": "CAP-MCP-PERSISTENCE",

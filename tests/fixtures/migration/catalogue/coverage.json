@@ -9524,7 +9524,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Address known, unknown and terminal handles; interruptions and retry decisions do not fabricate running work or duplicate a delivery.",
       "assertions": [
@@ -9548,7 +9548,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Load background-agent corpus and restart interrupted children; acknowledged results stay acknowledged and no completed work is replayed.",
       "assertions": [
@@ -9572,7 +9572,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Schedule parallel synthetic children at the configured limit; excess work queues and completion remains associated with its parent call.",
       "assertions": [
@@ -9596,7 +9596,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Have a child request a restricted operation; parent approval remains bound to the exact child call and denial propagates.",
       "assertions": [
@@ -9620,7 +9620,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Enumerate all profile inventory entries; reject invalid capabilities/Driver contracts without expanding scope.",
       "assertions": [
@@ -9644,7 +9644,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Install malformed and valid pack directories; only the valid immutable pack becomes available.",
       "assertions": [
@@ -9668,7 +9668,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Tamper one declared file or capability; verification refuses the pack without activating a partial baseline.",
       "assertions": [
@@ -9692,7 +9692,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Materialize a known prompt at each scope; source bytes remain unchanged and unsafe logical paths are rejected.",
       "assertions": [
@@ -9716,7 +9716,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Place conflicting overrides and a missing selected-pack asset; precedence is deterministic and missing assets never come from another pack.",
       "assertions": [
@@ -9740,7 +9740,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Select a verified pack, restart, then roll back; selected identities and on-disk lock agree at each step.",
       "assertions": [
@@ -9764,7 +9764,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Inspect bundled and managed projects; report the actual selected source and fail integrity checks on drift.",
       "assertions": [
@@ -9788,7 +9788,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Ingest a synthetic image twice; references identify the same content and durable records contain no image payload.",
       "assertions": [
@@ -9812,7 +9812,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Load valid, missing and corrupted image corpus cases; only valid content reaches a vision-enabled request and originals remain unchanged.",
       "assertions": [
@@ -9836,7 +9836,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Switch alpha/beta candidates with changed and absent files; active disk hashes agree with the selected bundle.",
       "assertions": [
@@ -9860,7 +9860,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Edit active artifacts or damage a backup, then switch; preserve edits when supported and never label incomplete restoration successful.",
       "assertions": [
@@ -9884,7 +9884,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Run a scripted regeneration; prior content and file bundles remain available and the new reply belongs to the same fork.",
       "assertions": [
@@ -9908,7 +9908,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Load nested-candidates and inspect both nested branches; endpoints stay scoped and selecting one does not erase siblings.",
       "assertions": [
@@ -11492,7 +11492,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Exercise the keyboard-context matrix with normal and busy turns; text stays intact and unsupported images fail explicitly.",
       "assertions": [
@@ -11516,7 +11516,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Resize narrow terminals and exit; controls remain usable and cursor/title/terminal state is restored.",
       "assertions": [
@@ -11540,7 +11540,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Stream multibyte prose and strict double-tilde samples while typing/scrolling; output completion does not lose mounted content or input.",
       "assertions": [
@@ -12714,7 +12714,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Open model/Skill/session completion after catalog drift; only valid current choices are offered and free text remains editable.",
       "assertions": [
@@ -12738,7 +12738,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Change the queue while cancellation rebuilds state; only an unchanged captured head may be submitted.",
       "assertions": [
@@ -12762,7 +12762,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Queue mixed messages/commands during tools; no item is skipped or duplicated and session switches clear the prior queue.",
       "assertions": [
@@ -12786,7 +12786,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Open/cancel/switch/copy side answers during a tool round; only complete frozen context is referenced and restart forgets side questions.",
       "assertions": [
@@ -12810,7 +12810,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Cross configured thresholds after queued/background inputs; compact or block the exact next request without an implicit default threshold.",
       "assertions": [
@@ -12834,7 +12834,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Compact around multi-tool turns and images; retained history is replayable and attachments are materialized only for requests.",
       "assertions": [
@@ -12858,7 +12858,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Load compact-state; replacement plus suffix projects correctly, old records remain, and unsupported checkpoint versions fail closed.",
       "assertions": [
@@ -12882,7 +12882,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Race a new turn or cancellation against summary completion; stale results do not replace the active head.",
       "assertions": [
@@ -12932,7 +12932,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Vary providers-file, config-directory and platform directory inputs; never read a project-root .env as supported configuration.",
       "assertions": [
@@ -12956,7 +12956,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Use a finite local discovery response and missing credentials; report available models or an actionable failure without inventing reachability.",
       "assertions": [
@@ -12980,7 +12980,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Manage a synthetic environment file; secret-valued command input is rejected and existing unrelated entries remain intact.",
       "assertions": [
@@ -13004,7 +13004,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Add, set and remove one registry entry; invalid cross-field input preserves original bytes and valid edits preserve unrelated content.",
       "assertions": [
@@ -13028,7 +13028,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Set different file/process secrets; select the file value while config show and diagnostics never expose secret values.",
       "assertions": [
@@ -13052,7 +13052,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Exercise invalid fields and unsupported versions using the configuration matrix; failed writes preserve the original files.",
       "assertions": [
@@ -13076,7 +13076,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Exercise clean/upgrade/repair/uninstall states; remove only owned integration and retain user configuration and project data.",
       "assertions": [
@@ -13100,7 +13100,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Run diagnostics, materialization and TUI from the release shape; no external Bun runtime is required.",
       "assertions": [
@@ -13124,7 +13124,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Smoke each platform/channel matrix row when its environment exists; no source checkout dependency or private runtime state enters the tarball.",
       "assertions": [
@@ -13148,7 +13148,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Validate package/release metadata without publishing; malformed tags, wrong versions and failed required gates refuse release.",
       "assertions": [
@@ -13172,7 +13172,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Use native Windows execution for startup/rendering/assets/exit and branded-resource checks; cross-build diagnostics never substitute for native evidence.",
       "assertions": [
@@ -13196,7 +13196,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Inspect all profile rows in the Engine matrix; reject unknown tools or malformed profiles rather than widening capabilities.",
       "assertions": [
@@ -13220,7 +13220,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Switch without summary and verify no provider request; requested summary uses the explicit compaction path and a handoff packet.",
       "assertions": [
@@ -13244,7 +13244,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Dump and shape the same Engine; source order, provenance and lengths agree while shape omits complete prompt text.",
       "assertions": [
@@ -14018,7 +14018,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Attempt guarded writes outside the approved roots and through links; an outside sentinel remains unchanged.",
       "assertions": [
@@ -14042,7 +14042,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Read multibyte and large fixtures at boundaries; returned ranges and truncation match the requested operation without corrupting UTF-8.",
       "assertions": [
@@ -14066,7 +14066,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "List virtual roots and try writes to read-only namespaces; listing and errors preserve the capability boundary.",
       "assertions": [
@@ -14090,7 +14090,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Inspect/install the package and read a bundled reference through an activated Skill; the reference matches its authoritative source.",
       "assertions": [
@@ -14114,7 +14114,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Resolve its frozen catalog entry and packaged resources; missing resources or drift fail explicitly rather than substituting content.",
       "assertions": [
@@ -14138,7 +14138,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Run a synthetic authoring flow; wrappers use the current host executable/configuration and never claim publication before successful writes.",
       "assertions": [
@@ -14162,7 +14162,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Invoke a finite configuration update through the packaged wrapper; correct user-level location and atomic validation apply.",
       "assertions": [
@@ -14336,7 +14336,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Supply oversized, malformed or symlinked instructions; warn and omit them without granting tools or aborting an ordinary turn.",
       "assertions": [
@@ -14360,7 +14360,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Edit instructions while a gate is pending in the same process; external edits wait until a new turn, while a successful approved update affects the next request. A fresh process recomposes bounded context.",
       "assertions": [
@@ -14384,7 +14384,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Try /init on an existing VESICLE.md; reject before provider use unless force is explicit, then retain the previous content.",
       "assertions": [
@@ -14408,7 +14408,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Race an external edit against an update; stale hashes refuse mutation and successful changes report the actual backup or prior absence.",
       "assertions": [
@@ -14432,7 +14432,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Update instructions then rewind the conversation; the file remains changed and the reported backup can restore its previous state.",
       "assertions": [
@@ -14456,7 +14456,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Provide four conflicting instruction files; selected content follows scope/Engine precedence and an empty override suppresses fallback.",
       "assertions": [
@@ -14480,7 +14480,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Request a handoff and reject or accept it after restart; preserve context and do not confuse it with permission approval.",
       "assertions": [
@@ -14504,7 +14504,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Request a declared and an undeclared gate; only the declared gate pauses, and the invalid request becomes a failed tool result.",
       "assertions": [
@@ -14528,7 +14528,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Pause with a question, restart, and answer; the same request resumes with one durable paired result.",
       "assertions": [
@@ -14552,7 +14552,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Reload each pending corpus case; retain the intended interaction and suppress stale requests superseded by later turns.",
       "assertions": [
@@ -16151,7 +16151,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Cancel a stalled stream or running tool; bounded cleanup occurs and cancellation remains distinct from provider failure.",
       "assertions": [
@@ -16175,7 +16175,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Inspect JSONL when a follow-up provider request arrives; required tool results already exist and survive a fresh process.",
       "assertions": [
@@ -16199,7 +16199,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Interrupt before a terminal response, resume, and verify no fabricated successful assistant answer or repeated side effect.",
       "assertions": [
@@ -16223,7 +16223,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Repeat nonprogressing tool responses and oversized context; guards stop or compact at the declared boundary and retain diagnostic evidence.",
       "assertions": [
@@ -16247,7 +16247,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Use a scripted two-round tool response; the next request includes each tool result exactly once and successful writes match disk bytes.",
       "assertions": [
@@ -16271,7 +16271,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Emit known usage and auxiliary events; main and auxiliary counters retain their distinct attribution across resume.",
       "assertions": [
@@ -16295,7 +16295,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Reconnect through same/cross-origin redirects; forbidden destinations receive no secrets and retry errors remain sanitized.",
       "assertions": [
@@ -16304,7 +16304,7 @@
       "normalization": [
         "None by default: retain semantic values, errors, tool order, bytes and opaque provider state. Any host-identity substitutions require an explicitly reviewed runner rule."
       ],
-      "negativeCase": "A cross-origin redirect receives authentication headers/body or a reconnect error exposes a secret URL.",
+      "negativeCase": "A forbidden redirect destination receives authentication headers/body or a reconnect error exposes a secret URL; same-origin redirects and same-host default-port HTTP-to-HTTPS upgrades remain allowed.",
       "kind": "offline"
     },
     {
@@ -16401,7 +16401,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Use finite servers in both eras and auto fallback; unavailable modern negotiation does not fabricate successful discovery.",
       "assertions": [
@@ -16425,7 +16425,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "With persistence off, neither spill nor auto-truncation occurs. With persistence on, retain complete output; only the enabled auto-truncate setting replaces oversized inline text with its preview/reference.",
       "assertions": [
@@ -16449,7 +16449,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Return mixed content, error results and no-vision images; preserve safe text and do not fetch untrusted URLs or import refused media.",
       "assertions": [
@@ -16473,7 +16473,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Change include/exclude/Engine filters and malformed schemas; only admitted names are callable and collisions remain explicit.",
       "assertions": [
@@ -16707,7 +16707,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Complete a confirmed migration in an isolated copy; archive and old prefix survive and the new identity is session-wide.",
       "assertions": [
@@ -16731,7 +16731,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Load malformed-migration and missing-data cases; expose a precise failure while original tree hashes remain unchanged.",
       "assertions": [
@@ -16905,7 +16905,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Use valid and malformed identity/candidate fixtures; a blocking report leaves original session and adjacent data unchanged.",
       "assertions": [
@@ -17179,7 +17179,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Switch Chat/Workspace with each modal; decision panels become pending strips where required and drafts survive.",
       "assertions": [
@@ -17203,7 +17203,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Exercise every decision surface and focus zone; Allow receives no rejection note and Escape follows the appropriate context.",
       "assertions": [
@@ -17227,7 +17227,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Read long and short panels, scroll with keys/wheel and resize; closing reading never submits or rejects an option.",
       "assertions": [
@@ -17251,7 +17251,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Change a command after approval or resume a pending request; stale bindings cannot authorize another operation.",
       "assertions": [
@@ -17275,7 +17275,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Repeat the same forbidden path or unsupported tool under every mode; capability and path checks remain enforced.",
       "assertions": [
@@ -17299,7 +17299,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Attempt to persist YOLO and resume a former YOLO session; persisted defaults are refused and resumed privilege is downgraded.",
       "assertions": [
@@ -17946,7 +17946,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Restart with completed and indeterminate tasks; no command is replayed and already-recorded notifications are not delivered twice.",
       "assertions": [
@@ -17970,7 +17970,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Start a descendant process and cancel or time out; all owned processes stop and the result reports the actual outcome.",
       "assertions": [
@@ -17994,7 +17994,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Execute finite synthetic commands for each available profile with a disallowed synthetic secret in the parent environment; the child allowlist excludes it and output limits preserve valid text.",
       "assertions": [
@@ -19552,7 +19552,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Run the offline preflight and a bounded existing-service lane when authorized; missing prerequisites remain skipped/unavailable, never passed.",
       "assertions": [
@@ -19576,7 +19576,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Load quality-decision and quality-accepted; accepted warnings keep their resolution and rejected candidates never appear as delivered replies.",
       "assertions": [
@@ -19600,7 +19600,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Use known clean/finding/inconclusive texts; unreadable, oversized or budget-exhausted targets never become clean assessments.",
       "assertions": [
@@ -19624,7 +19624,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Toggle modes with a finite fixture Judge; observe cannot block and rewrite cannot activate without confirmation.",
       "assertions": [
@@ -19648,7 +19648,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Load optional-quality-state; pending decision disappears while history and applicable warnings remain available.",
       "assertions": [
@@ -19699,7 +19699,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Repeat a rejected target or exhaust attempts; surface a durable decision rather than loop indefinitely or silently deliver rejected prose.",
       "assertions": [
@@ -21473,7 +21473,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Create, move and delete nested artifacts across turns; checkpoints preserve enough pre-state for declared rewind modes.",
       "assertions": [
@@ -21497,7 +21497,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Modify scratch and run a host process before rewind; retain explicit exclusions/taint instead of claiming whole-host restoration.",
       "assertions": [
@@ -21521,7 +21521,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Rewind a turn in each mode; history and disk change only as requested, and interrupted restoration never reports full success.",
       "assertions": [
@@ -21854,7 +21854,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Load legacy-linear and append a new turn in a sandbox; old bytes remain a prefix and history order remains correct.",
       "assertions": [
@@ -21878,7 +21878,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Select nested branches and malformed links; active messages follow ancestry, inactive records remain durable, bad links fail explicitly.",
       "assertions": [
@@ -21902,7 +21902,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "List a project containing parent and child JSONL files; parent summaries reflect actual pending state and explicit child listing remains available.",
       "assertions": [
@@ -21926,7 +21926,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Read an older branch after host-state changes; content rewinds while the latest host preferences and migrated identity remain effective.",
       "assertions": [
@@ -21950,7 +21950,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Replay signatures/encrypted state byte-for-byte; unknown required versions refuse resume rather than dropping state.",
       "assertions": [
@@ -21974,7 +21974,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Load paused/failed tool tails; synthetic failure placeholders pair correctly and reload does not accumulate duplicates.",
       "assertions": [
@@ -21998,7 +21998,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Use existing and new registries with discovery success/failure; validated configuration remains recoverable and the chosen project launches once.",
       "assertions": [
@@ -22022,7 +22022,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Start setup with dark/light and cancel/retry steps; focus and edits persist without affecting unrelated host defaults.",
       "assertions": [
@@ -22271,7 +22271,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Activate and inspect resources, then compact or rewind; mounts follow live activations and stale hashes cannot masquerade as current content.",
       "assertions": [
@@ -22295,7 +22295,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Create and publish a synthetic draft; invalid content cannot replace a working Skill and target scope is explicit.",
       "assertions": [
@@ -22319,7 +22319,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Install same-name Skills across scopes; the documented winner and diagnostics are visible and only eligible entries activate.",
       "assertions": [
@@ -22343,7 +22343,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Change a Skill body after freezing; no silent substitution occurs and refresh reports changed/removed/added entries.",
       "assertions": [
@@ -22367,7 +22367,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Load valid and malformed roots; invalid entries produce diagnostics without being silently accepted.",
       "assertions": [
@@ -22391,7 +22391,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Try disabled process capability, unsafe resource paths and cancellation; all normal process guarantees remain enforced.",
       "assertions": [
@@ -22415,7 +22415,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Update, roll back and fail an installation; the active snapshot never becomes a partial or falsely successful result.",
       "assertions": [
@@ -22439,7 +22439,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Open a Stage session from valid cards, restart, then alter a card; the frozen context is retained and drift is explicit.",
       "assertions": [
@@ -22463,7 +22463,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Inspect Stage requests and rendered openings; no tool or undeclared gate is offered and formatting does not hide narrative content.",
       "assertions": [
@@ -22512,7 +22512,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Rename and switch branches; title provenance survives and title metadata never enters provider conversation messages.",
       "assertions": [
@@ -22536,7 +22536,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Race title claims and restart; at most the permitted work executes and disabled titles produce zero helper calls.",
       "assertions": [
@@ -23460,7 +23460,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Use local CONNECT fixtures with bypass and 407 failures; routing and redacted errors match configuration and auth failure is terminal.",
       "assertions": [
@@ -23484,7 +23484,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "End SSE/WS before successful terminal commit; no host tool runs and retry budgets include every attempt.",
       "assertions": [
@@ -24266,7 +24266,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Compare missing/configured credential surfaces and finite fixture results; absent credentials hide tools and citations retain provenance.",
       "assertions": [
@@ -24290,7 +24290,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Toggle search on supported/unsupported combinations; only admitted requests include native search and audits persist query/citation data.",
       "assertions": [
@@ -24342,7 +24342,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Replace or change an open file externally; stale content is marked and no silent overwrite occurs.",
       "assertions": [
@@ -24366,7 +24366,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Edit multiple files, exceed eight-buffer pressure and save; dirty buffers are protected and writes preserve the correct file identity.",
       "assertions": [
@@ -24390,7 +24390,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Invoke success/failure/missing editors and change/delete the file; terminal restoration and buffer refresh reflect the actual outcome.",
       "assertions": [
@@ -24414,7 +24414,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Operate on nested files and dirty buffers; buffer rekeys preserve edits, deleted files enter trash and outside paths are rejected.",
       "assertions": [
@@ -24438,7 +24438,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Inspect/validate/switch artifacts without provider calls; an explicit revision prompt is the only path that generates new content.",
       "assertions": [
@@ -24462,7 +24462,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Navigate a mixed tree with links/binary/large files; selection and visibility follow the keyboard/context matrix without reading escaped targets.",
       "assertions": [
@@ -24486,7 +24486,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Validate one file, select another and edit/undo/save; status, findings and jump behavior remain attached to the correct artifact.",
       "assertions": [
@@ -24510,7 +24510,7 @@
       ],
       "input": {
         "path": "tests/fixtures/migration/catalogue/core-contracts.json",
-        "sha256": "2feab5334992a06006d24e153d7ae43d5f17267f262514d7304605f104ad591a"
+        "sha256": "7e915ae3bfcd990f0990526a4c3fe6328b373f5e873300c57d17b0ed39e0c24a"
       },
       "action": "Open small/large/linked/unwritable files; only eligible content enters an editable buffer and preview/source switching remains meaningful.",
       "assertions": [
