@@ -60,8 +60,10 @@ def process_tree(pid):
 
 
 class Terminal:
-    def __init__(self, binary, project, env, output, name):
+    def __init__(self, binary, project, env, output, name, output_limit_bytes=64 * 1024 * 1024):
         self.raw = bytearray()
+        self.raw_truncated = False
+        self.output_limit_bytes = output_limit_bytes
         self.samples = []
         self.phase = 'startup'
         self.started = time.monotonic()
@@ -75,10 +77,13 @@ class Terminal:
         os.close(slave)
         self.last_sample = 0
 
-    def tick(self):
+    def tick(self, enforce_cap=True):
         if select.select([self.master], [], [], .05)[0]:
             try:
-                self.raw.extend(os.read(self.master, 65536))
+                chunk = os.read(self.master, 65536)
+                room = max(0, self.output_limit_bytes - len(self.raw))
+                self.raw.extend(chunk[:room])
+                self.raw_truncated |= len(chunk) > room
             except OSError:
                 pass
         now = time.monotonic()
@@ -87,23 +92,25 @@ class Terminal:
             self.samples.append({'seconds': now - self.started, 'phase': self.phase,
                                  'treeRssKiB': sum(row['rssKiB'] for row in rows), 'processes': rows})
             self.last_sample = now
-        if len(self.raw) > 64 * 1024 * 1024:
+        if enforce_cap and self.raw_truncated:
             raise RuntimeError('PTY output cap exceeded')
 
     def wait(self, predicate, timeout=20):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             self.tick()
+            if self.child.poll() is not None:
+                raise RuntimeError(f'TUI exited during {self.phase} observation')
             if predicate():
                 return (time.monotonic() - self.started) * 1000
-            if self.child.poll() is not None:
-                raise RuntimeError('TUI exited before expected observation')
         raise RuntimeError(f'PTY observation timeout in {self.phase}')
 
     def hold(self, seconds):
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
             self.tick()
+            if self.child.poll() is not None:
+                raise RuntimeError(f'TUI exited during {self.phase} observation')
 
     def send(self, text):
         os.write(self.master, text.encode())
@@ -127,22 +134,43 @@ class Terminal:
     def close(self):
         self.phase = 'exit'
         started = time.monotonic()
-        if self.child.poll() is None:
-            self.send('\x03')
-            self.hold(.3)
-            self.send('\x03')
-            deadline = time.monotonic() + 10
-            while self.child.poll() is None and time.monotonic() < deadline:
-                self.tick()
-        forced = self.child.poll() is None
-        if forced:
-            os.killpg(self.child.pid, signal.SIGKILL)
-        code = self.child.wait(timeout=5)
-        self.tick()
-        os.close(self.master)
-        (self.output / f'{self.name}.pty').write_bytes(self.raw)
-        (self.output / f'{self.name}.samples.json').write_text(json.dumps(self.samples, indent=2) + '\n')
-        return {'exitCode': code, 'forcedCleanup': forced, 'exitObservedMs': (time.monotonic() - started) * 1000}
+        errors = []
+        forced = False
+        code = self.child.poll()
+        try:
+            if code is None:
+                self.send('\x03')
+                deadline = time.monotonic() + .3
+                while self.child.poll() is None and time.monotonic() < deadline:
+                    self.tick(enforce_cap=False)
+                if self.child.poll() is None:
+                    self.send('\x03')
+                deadline = time.monotonic() + 10
+                while self.child.poll() is None and time.monotonic() < deadline:
+                    self.tick(enforce_cap=False)
+        except BaseException as error:
+            errors.append(f'{type(error).__name__}: {error}')
+        finally:
+            forced = self.child.poll() is None
+            if forced:
+                try:
+                    os.killpg(self.child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except OSError as error:
+                    errors.append(str(error))
+                    self.child.kill()
+            try:
+                code = self.child.wait(timeout=5)
+                self.tick(enforce_cap=False)
+            except BaseException as error:
+                errors.append(f'{type(error).__name__}: {error}')
+            finally:
+                os.close(self.master)
+                (self.output / f'{self.name}.pty').write_bytes(self.raw)
+                (self.output / f'{self.name}.samples.json').write_text(json.dumps(self.samples, indent=2) + '\n')
+        return {'exitCode': code, 'forcedCleanup': forced, 'cleanupErrors': errors, 'rawTruncated': self.raw_truncated,
+                'exitObservedMs': (time.monotonic() - started) * 1000}
 
 
 def environment(config, port):
@@ -274,19 +302,23 @@ def main():
         terminal = None
         if provider.errors or len(provider.requests) != 2:
             raise RuntimeError(f'provider request contract failed: {provider.errors}; count={len(provider.requests)}')
-        if result['interactiveExit']['forcedCleanup'] or result['longExit']['forcedCleanup']:
-            raise RuntimeError('TUI required forced cleanup')
+        if any(result[key]['forcedCleanup'] or result[key]['exitCode'] != 0 or result[key]['cleanupErrors'] for key in ('interactiveExit', 'longExit')):
+            raise RuntimeError('TUI did not exit cleanly')
         result['status'] = 'passed'
-    except Exception as error:
-        result['error'] = str(error)
+    except BaseException as error:
+        result['error'] = f'{type(error).__name__}: {error}'
         raise
     finally:
-        if terminal:
-            result['failureExit'] = terminal.close()
-        provider.close()
-        (output / 'wire.json').write_text(json.dumps(provider.requests, indent=2, ensure_ascii=False) + '\n')
-        result['requestCount'] = len(provider.requests)
-        (output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+        try:
+            if terminal:
+                result['failureExit'] = terminal.close()
+        finally:
+            try:
+                provider.close()
+            finally:
+                result['requestCount'] = len(provider.requests)
+                (output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+                (output / 'wire.json').write_text(json.dumps(provider.requests, indent=2, ensure_ascii=False) + '\n')
     summaries = {}
     for name in ('interactive', 'long'):
         samples = json.loads((output / f'{name}.samples.json').read_text())

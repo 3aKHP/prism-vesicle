@@ -58,6 +58,8 @@ jobs:
       - run: bun run lint
       - run: bun run typecheck
       - run: bun test
+      - name: Check resource probe failure handling
+        run: python3 -m unittest discover -s tests/unit/migration -p 'resource_probe_test.py'
       - id: rust
         name: Detect Rust verification scope
         run: bun scripts/check/rust-workspace.ts --detect

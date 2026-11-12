@@ -47,6 +47,7 @@ temp/
 test-workspaces/
 
 # OS / editor
+__pycache__/
 .DS_Store
 Thumbs.db
 .vscode/
