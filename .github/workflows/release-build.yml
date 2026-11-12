@@ -112,7 +112,9 @@ jobs:
         timeout-minutes: 15
         run: bun scripts/check/rust-workspace.ts --install-toolchain
       - uses: actions/upload-artifact@v7
-        if: steps.rust.outputs.enabled == 'true'
+        # The publish caller collects publish-* artifacts into the release.
+        # Development binaries must never enter that collection.
+        if: steps.rust.outputs.enabled == 'true' && inputs.artifact_prefix == 'ci'
         with:
           name: ${{ inputs.artifact_prefix }}-rust-dev-${{ matrix.os }}
           path: |
