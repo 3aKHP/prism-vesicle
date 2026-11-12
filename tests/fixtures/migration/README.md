@@ -14,6 +14,8 @@ Paths are relative to the explicitly supplied evidence root. Missing files, wron
 
 ## Commands
 
+The commands and tests require Bun 1.3.14 or newer and Git on PATH. Missing Git produces an explicit prerequisite error in the CLI integration test; it is not reported as a passing test. The version-1 envelope and records reject unknown fields; producer result artifacts may carry additional raw observations.
+
 Use a detached, clean checkout of the recorded TS baseline as the source root. Do not use a Rust integration commit as an unexplained replacement for the TS lineage. Preserve the initial SHA, advance the recorded baseline only after reviewing the TS changes, and retain each prior inventory and evidence bundle.
 
 ```sh

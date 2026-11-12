@@ -126,7 +126,9 @@ async function checkBoundaryGates(bundle: EvidenceBundle, root: string): Promise
       if (!gate.candidate || !gate.candidateSha) errors.push(`${id}: missing observed candidate artifact or commit`);
       for (const sid of gate.scenarioIds) {
         const scenario = bundle.scenarios.find((s) => s.id === sid);
-        if (scenario?.kind !== "human" || !gate.verificationIds.some((vid) => bundle.verifications.some((v) => v.id === vid && v.scenarioId === sid && v.status === "passed" && v.rustSha === gate.candidateSha))) errors.push(`${id}: missing human evidence for ${sid}`);
+        // Missing/non-human references already have a precise diagnostic above.
+        if (!scenario || scenario.kind !== "human") continue;
+        if (!gate.verificationIds.some((vid) => bundle.verifications.some((v) => v.id === vid && v.scenarioId === sid && v.status === "passed" && v.rustSha === gate.candidateSha))) errors.push(`${id}: missing human evidence for ${sid}`);
       }
     }
   }

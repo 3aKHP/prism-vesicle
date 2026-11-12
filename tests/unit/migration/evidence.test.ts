@@ -181,6 +181,7 @@ describe("reviewed requirements and human observations", () => {
 });
 
 test("CLI binds a real clean checkout, detects tracked increments and fails on dirty source", async () => {
+  if (!Bun.which("git")) throw new Error("Migration CLI integration requires Git on PATH (Bun is the test runner).");
   const { mkdir } = await import("node:fs/promises");
   const { resolve } = await import("node:path");
   const { scanBaseline } = await import("../../../scripts/check/migration/baseline");
@@ -231,4 +232,14 @@ test("known regressions cannot disappear and resolution needs passing observatio
   expect((await check()).ok).toBe(true);
   bundle.verifications = [];
   expect((await check()).errors.join()).toContain("resolved difference lacks passing evidence");
+});
+
+test("versioned evidence rejects unknown root and nested fields", async () => {
+  const options = { root, baseline, requirements, tsSourceSha: tsSha, stage: bundle.stage };
+  expect((await checkEvidence({ ...bundle, passed: true }, options)).errors.join()).toContain("unknown field passed");
+  const bad = structuredClone(bundle) as unknown as Record<string, unknown>;
+  bad.verifications = [{ ...bundle.verifications[0], assumedPassed: true }];
+  expect((await checkEvidence(bad, options)).errors.join()).toContain("unknown field assumedPassed");
+  bundle.scenarios[0]!.input = { ...bundle.scenarios[0]!.input, ignoredHash: "wrong" } as typeof bundle.scenarios[0]["input"];
+  expect((await check()).errors.join()).toContain("unknown field ignoredHash");
 });
