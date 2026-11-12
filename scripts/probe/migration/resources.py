@@ -302,7 +302,7 @@ def main():
         terminal = None
         if provider.errors or len(provider.requests) != 2:
             raise RuntimeError(f'provider request contract failed: {provider.errors}; count={len(provider.requests)}')
-        if any(result[key]['forcedCleanup'] or result[key]['exitCode'] != 0 or result[key]['cleanupErrors'] for key in ('interactiveExit', 'longExit')):
+        if any(result[key]['forcedCleanup'] or result[key]['exitCode'] != 0 or result[key]['cleanupErrors'] or result[key]['rawTruncated'] for key in ('interactiveExit', 'longExit')):
             raise RuntimeError('TUI did not exit cleanly')
         result['status'] = 'passed'
     except BaseException as error:
