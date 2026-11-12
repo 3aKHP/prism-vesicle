@@ -15,8 +15,7 @@ scripts/check/deep-cr-trigger.sh <base>     # base 默认 develop
 
 - `trigger:false` → **停止**，改走 Tier 1；除非用户明确要求，否则不要烧 Tier 2 预算。
 - `trigger:true` → 继续。
-- 脚本缺失时按 `docs/dev/WORKFLOW.md` 的规则手工判定（CATEGORY_MATCH && (CROSS_BOUNDARY
-  || SIZE_FLOOR || RELEASE_BRANCH)），规则与 `scripts/check/deep-cr-trigger.sh` 保持同步。
+- 脚本缺失时按 `docs/dev/WORKFLOW.md` 的规则手工判定（RUST_CHANGE || (CATEGORY_MATCH && (CROSS_BOUNDARY || SIZE_FLOOR || RELEASE_BRANCH))；无法解析 base 时不得授予 Tier 1 豁免），规则与 `scripts/check/deep-cr-trigger.sh` 保持同步。
 
 ## 调用 workflow 工具
 

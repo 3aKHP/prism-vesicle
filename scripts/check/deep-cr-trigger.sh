@@ -5,14 +5,14 @@
 # Never modifies state. The rule mirrors docs/dev/WORKFLOW.md "Rapid Development
 # Exception" high-risk list:
 #
-#   trigger = CATEGORY_MATCH && (CROSS_BOUNDARY || SIZE_FLOOR || RELEASE_BRANCH)
+#   trigger = RUST_CHANGE || (CATEGORY_MATCH && (CROSS_BOUNDARY || SIZE_FLOOR || RELEASE_BRANCH))
 #
 # Usage: scripts/check/deep-cr-trigger.sh [base]    (base defaults to "develop")
 set -u
 
 base="${1:-develop}"
 
-# ---- collect the changed file set (committed + staged + unstaged) ------------
+# ---- collect the committed changed file set ---------------------------------
 mb=""
 committed_ok=1
 mb_out=$(git merge-base HEAD "$base" 2>/dev/null) || committed_ok=0
@@ -26,7 +26,9 @@ fi
 # are NOT included. Capture via command substitution, not a pipeline into a
 # function — bash runs pipeline commands in a subshell and would lose the value.
 changed_raw=""
-if [ -n "$mb" ]; then changed_raw="${changed_raw}$(git diff --name-only "$mb" HEAD 2>/dev/null)"$'\n'; fi
+# Disable rename collapsing so moving code out of a guarded path still reviews
+# its old domain, and renaming Rust to another suffix cannot evade the gate.
+if [ -n "$mb" ]; then changed_raw="${changed_raw}$(git -c core.quotePath=false diff --no-renames --name-only "$mb" HEAD 2>/dev/null)"$'\n'; fi
 
 # distinct file list + count
 distinct_files=$(printf '%s' "$changed_raw" | grep . | sort -u)
@@ -41,6 +43,7 @@ fi
 # intentionally absent: Tier 2 has no TUI lens, so TUI-only changes stay on Tier 1.
 classify() {
   case "$1" in
+    *.rs|Cargo.toml|*/Cargo.toml|Cargo.lock|*/Cargo.lock|rust-toolchain|rust-toolchain.toml|*/rust-toolchain|*/rust-toolchain.toml|.cargo/*|*/.cargo/*) echo rust ;;
     src/providers/*)               echo provider ;;
     src/core/tools/*)              echo tool ;;
     src/core/session/*|src/core/checkpoints/*) echo session ;;
@@ -105,6 +108,17 @@ if [ "$committed_ok" -eq 0 ]; then reasons+=("base '${base}' not resolvable loca
 trigger=0
 if [ "$category_match" -eq 1 ] && { [ "$cross_boundary" -eq 1 ] || [ "$size_floor" -eq 1 ] || [ "$release" -eq 1 ]; }; then
   trigger=1
+fi
+# No stable Rust directory map exists yet. Every Rust/build input enters all
+# lenses, even a tiny diff in a newly named crate. Narrow only with an explicit
+# reviewed domain map. An unresolved base cannot establish a safe exemption.
+if printf '%s\n' "$categories" | grep -qx rust; then
+  trigger=1
+  reasons+=("rust_change: all Rust source/build paths require all five review lenses")
+fi
+if [ "$committed_ok" -eq 0 ]; then
+  trigger=1
+  reasons+=("unknown_scope: resolve the base before reviewing; no Tier 1 exemption")
 fi
 
 # ---- emit JSON --------------------------------------------------------------

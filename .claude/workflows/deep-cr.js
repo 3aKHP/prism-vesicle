@@ -221,6 +221,8 @@ ${lens.brief}
 
 ${focusClause}
 
+RUST SCOPE: Regardless of the TS prefixes above, every lens must also inspect ALL changed *.rs, Cargo.toml, Cargo.lock, rust-toolchain / rust-toolchain.toml and .cargo/ files at ANY depth. Read the complete diff first; do not assume an unfamiliar crate name is outside your lens. Apply your domain contract to relevant Rust behavior and record unrelated files as not applicable. There is no Rust path exemption until a reviewed domain map replaces this conservative routing. Build scripts and dependency changes can cross all boundaries.
+
 CONTRACT DOCS your findings MUST cite (read them before judging; do not trust memory):
 ${lens.docs.map((d) => '  - ' + d).join('\n')}
 

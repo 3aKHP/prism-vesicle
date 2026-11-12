@@ -58,6 +58,13 @@ jobs:
       - run: bun run lint
       - run: bun run typecheck
       - run: bun test
+      - id: rust
+        name: Detect Rust verification scope
+        run: bun scripts/check/rust-workspace.ts --detect
+      - name: Verify Rust workspace (when present)
+        if: steps.rust.outputs.enabled == 'true'
+        timeout-minutes: 15
+        run: bun scripts/check/rust-workspace.ts
       - name: Execute and compare TS migration oracles
         run: |
           bun scripts/smoke/migration/main.ts . "$RUNNER_TEMP/vesicle-oracle-a"

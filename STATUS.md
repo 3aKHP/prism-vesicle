@@ -263,6 +263,8 @@ Grouped by subsystem. Each item states the current limit or deferral; behavioral
 
 The development-only [migration evidence tooling](./tests/fixtures/migration/README.md) enumerates source entry candidates and exercises five TS facade/CLI scenarios through isolated processes. Classification of all capabilities and Rust parity are separate acceptance work; successful TS observations do not imply a Rust implementation.
 
+Rust source/build inputs at any path now trigger all five deep-review lenses. CI detects whether a pinned root Rust workspace exists and runs its formatting, Clippy and tests only when present; the current checkout has none, so Cargo validation is explicitly skipped. See [workflow applicability](./docs/dev/WORKFLOW.md#rust-verification-applicability).
+
 Standard checks:
 
 ```bash
