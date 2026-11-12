@@ -366,3 +366,116 @@ describe("MCP timeout and error surfacing", () => {
     await result.connection.close();
   }, 10000);
 });
+
+// Security oracle for the SDK upgrade: redirects must not export configured
+// credentials or request bodies to a different origin, in either protocol era.
+describe("MCP redirect boundary", () => {
+  for (const mode of ["legacy", "modern"] as const) {
+    test.each([307, 308])(`${mode} rejects cross-origin %i before reaching its destination`, async (status) => {
+      const destination = await createLoopbackFixture({ mode });
+      let receivedCanary = false;
+      const redirector = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) {
+        receivedCanary = request.headers.get("x-api-key") === "synthetic-canary";
+        return new Response(null, { status, headers: { Location: `${destination.url}/private-path?api_key=synthetic-secret` } });
+      } });
+      try {
+        const result = await createMcpConnection({ ...serverConfig(redirector.url.href, mode), headers: { "x-api-key": "synthetic-canary" } });
+        if (result.ok) await result.connection.close();
+        expect(result.ok).toBe(false);
+        if (result.ok) throw new Error("Cross-origin redirect unexpectedly connected");
+        expect(result.error).not.toContain("127.0.0.1");
+        expect(result.error).not.toContain("private-path");
+        expect(result.error).not.toContain("synthetic-secret");
+        expect(receivedCanary).toBe(true);
+        expect(destination.counts.requests).toBe(0);
+      } finally {
+        await redirector.stop(true);
+        await destination.close();
+      }
+    });
+
+    test(`${mode} retains same-origin redirects and completes a tool call`, async () => {
+      const destination = await createLoopbackFixture({ mode });
+      let redirected = 0;
+      let receivedCanary = false;
+      const redirector = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
+        if (new URL(request.url).pathname === "/start") {
+          redirected++;
+          return new Response(null, { status: 307, headers: { Location: "/mcp" } });
+        }
+        receivedCanary = request.headers.get("x-api-key") === "synthetic-canary";
+        return fetch(destination.url, { method: request.method, headers: request.headers, body: request.method === "POST" ? await request.text() : undefined });
+      } });
+      try {
+        const result = await createMcpConnection({ ...serverConfig(new URL("start", redirector.url).href, mode), headers: { "x-api-key": "synthetic-canary" } });
+        if (!result.ok) throw new Error(result.error);
+        try {
+          const response = await result.connection.callTool("ping", {});
+          expect(response.isError).toBe(false);
+          expect(destination.counts.toolCalls).toBe(1);
+          expect(redirected).toBeGreaterThan(0);
+          expect(receivedCanary).toBe(true);
+        } finally { await result.connection.close(); }
+      } finally {
+        await redirector.stop(true);
+        await destination.close();
+      }
+    });
+  }
+});
+
+for (const mode of ["legacy", "modern"] as const) {
+  test(`${mode} permits a same-host default-port HTTPS upgrade`, async () => {
+    const destination = await createLoopbackFixture({ mode });
+    const urls: string[] = [];
+    // Exercise the SDK's URL policy through the Vesicle facade. The protocol
+    // responses still come from the real loopback server; no TLS claim is made.
+    const upgradeFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      urls.push(url);
+      if (url === "http://upgrade.example.test/mcp") return new Response(null, { status: 307, headers: { Location: "https://upgrade.example.test/mcp" } });
+      if (url !== "https://upgrade.example.test/mcp") throw new Error(`Unexpected upgrade target: ${url}`);
+      return fetch(destination.url, init);
+    }) as typeof fetch;
+    try {
+      const result = await createMcpConnection(serverConfig("http://upgrade.example.test/mcp", mode), { fetchImpl: upgradeFetch });
+      if (!result.ok) throw new Error(result.error);
+      try {
+        await result.connection.callTool("ping", {});
+        expect(destination.counts.toolCalls).toBe(1);
+        expect(urls).toContain("http://upgrade.example.test/mcp");
+        expect(urls).toContain("https://upgrade.example.test/mcp");
+      } finally { await result.connection.close(); }
+    } finally { await destination.close(); }
+  });
+}
+
+for (const mode of ["legacy", "modern"] as const) {
+  test(`${mode} redacts redirect destinations after connecting and reconnecting`, async () => {
+    const destination = await createLoopbackFixture({ mode });
+    let redirectTools = false;
+    let failFirstList = true;
+    const proxy = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
+      const body = request.method === "POST" ? await request.text() : undefined;
+      if (redirectTools && body && JSON.parse(body).method === "tools/list" && failFirstList) {
+        failFirstList = false;
+        return new Response("temporary fixture failure", { status: 503 });
+      }
+      if (redirectTools && body && JSON.parse(body).method?.startsWith("tools/")) return new Response(null, { status: 307, headers: { Location: "https://private-target.example.test/private-path?api_key=synthetic-secret" } });
+      return fetch(destination.url, { method: request.method, headers: request.headers, body });
+    } });
+    try {
+      const result = await createMcpConnection(serverConfig(proxy.url.href, mode));
+      if (!result.ok) throw new Error(result.error);
+      try {
+        redirectTools = true;
+        await expect(result.connection.listTools()).rejects.toThrow("MCP redirect was not followed; configure the intended final endpoint explicitly.");
+        await expect(result.connection.callTool("ping", {})).rejects.toThrow("MCP redirect was not followed; configure the intended final endpoint explicitly.");
+        expect(destination.counts.toolCalls).toBe(0);
+      } finally { await result.connection.close(); }
+    } finally {
+      await proxy.stop(true);
+      await destination.close();
+    }
+  });
+}

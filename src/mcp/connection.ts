@@ -174,6 +174,7 @@ function makeConnection(
         sdkResult = await currentClient.callTool({ name, arguments: args }, { signal: callOptions?.signal });
       } catch (error) {
         if (callOptions?.signal?.aborted) throw abortReason(callOptions.signal);
+        if (isRedirectFailure(error)) throw new McpError(safeMessage(error));
         if (isConnectionLevelError(error)) {
           await reconnect();
           throw new McpError(`MCP server ${config.id} connection error: tools/call was not replayed.`);
@@ -204,7 +205,11 @@ async function paginateTools(client: Client, signal?: AbortSignal): Promise<McpR
   const tools: McpRawTool[] = [];
   let cursor: string | undefined;
   for (;;) {
-    const result = await client.listTools({ ...(cursor ? { cursor } : {}), ...(signal ? { signal } : {}) });
+    const result = await client.listTools({ ...(cursor ? { cursor } : {}), ...(signal ? { signal } : {}) }).catch((error: unknown) => {
+      // Own this diagnostic at pagination so a reconnect retry cannot bypass it.
+      if (isRedirectFailure(error)) throw new McpError(safeMessage(error));
+      throw error;
+    });
     const currentTools = Array.isArray(result.tools) ? result.tools : [];
     tools.push(...currentTools);
     const nextCursor = typeof result.nextCursor === "string" ? result.nextCursor.trim() : "";
@@ -392,8 +397,14 @@ function isConnectionLevelError(error: unknown): boolean {
   return false;
 }
 
+function isRedirectFailure(error: unknown): error is SdkHttpError {
+  return error instanceof SdkHttpError && error.status >= 300 && error.status < 400;
+}
+
 function safeMessage(error: Error): string {
+  if (isRedirectFailure(error)) return "MCP redirect was not followed; configure the intended final endpoint explicitly.";
   return error.message
+    .replace(/https?:\/\/[^\s<>"']+/gi, "[redacted URL]")
     .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
     .replace(/(Authorization|X-API-Key|X-Auth-Token|Cookie|apiKey|api_key)\s*[:=]\s*[^\s;,$]+/gi, "$1: [redacted]")
     .slice(0, 256);

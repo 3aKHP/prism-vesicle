@@ -15,6 +15,7 @@ Config lives at the user-level `mcp.yaml` beside `providers.yaml`; set `VESICLE_
 
 - A present `mcp.yaml` defaults to enabled. Use top-level `enabled: false` only when you want to keep the file but disable MCP.
 - Secrets are expanded from the same sibling `.env` file used by provider and Tavily keys.
+- HTTP redirects permit the same origin (scheme, host and port) and a same-host HTTP-to-HTTPS upgrade between default ports. Configure the final server URL when a deployment redirects across origins; custom headers and request bodies must not be forwarded to that destination.
 - `transport: streamable-http` and `transport: http` both select the Streamable HTTP client.
 - `negotiation` accepts `legacy`, `modern`, or `auto`. Absent normalizes to `legacy` (no probe, unchanged wire behavior).
 - `protocolVersion` is the configured legacy revision (default `2025-03-26`). It does not select the era. The SDK negotiates its own latest legacy revision (`2025-11-25`) during the `initialize` handshake; the configured value is informational and does not override the SDK's negotiation.
