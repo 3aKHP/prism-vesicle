@@ -14,6 +14,12 @@ export function requireRustWorkspace(files: string[]): boolean {
   return true;
 }
 
+export function requirePinnedToolVersion(tool: "rustc" | "cargo", version: string, pin: string): void {
+  if (!version.startsWith(`${tool} ${pin} (`)) {
+    throw new Error(`Effective ${tool} does not match pinned ${pin}: ${version.trim()}. Remove conflicting toolchain overrides.`);
+  }
+}
+
 async function command(root: string, args: string[], capture = false): Promise<string> {
   const child = Bun.spawn(args, { cwd: root, stdout: capture ? "pipe" : "inherit", stderr: "inherit" });
   const output = capture ? await new Response(child.stdout).text() : "";
@@ -34,6 +40,11 @@ export async function verifyRustWorkspace(root: string, detectOnly = false): Pro
     throw new Error("rust-toolchain.toml must request rustfmt and clippy components.");
   }
   if (detectOnly) return true;
+  // Directory and environment overrides must not turn a different compiler's
+  // successful run into evidence for the declared pin.
+  for (const tool of ["rustc", "cargo"] as const) {
+    requirePinnedToolVersion(tool, await command(root, [tool, "--version"], true), settings.channel);
+  }
   // --workspace would otherwise silently ignore a second, unlisted crate.
   const metadata: unknown = JSON.parse(await command(root, ["cargo", "metadata", "--no-deps", "--locked", "--format-version", "1"], true));
   if (!metadata || typeof metadata !== "object" || !("packages" in metadata) || !Array.isArray(metadata.packages) || !("workspace_members" in metadata) || !Array.isArray(metadata.workspace_members)) {

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { requireRustWorkspace, rustWorkspaceInputs, verifyRustWorkspace } from "../../../scripts/check/rust-workspace.ts";
+import { requirePinnedToolVersion, requireRustWorkspace, rustWorkspaceInputs, verifyRustWorkspace } from "../../../scripts/check/rust-workspace.ts";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -79,6 +79,11 @@ describe.skipIf(process.platform === "win32")("review routing on real committed 
 });
 
 describe("Rust CI applicability", () => {
+  test("a successful command from another compiler cannot verify the declared pin", () => {
+    expect(() => requirePinnedToolVersion("rustc", "rustc 1.99.0 (fixture 2026-09-28)", "1.90.0")).toThrow("does not match pinned");
+    expect(() => requirePinnedToolVersion("cargo", "cargo 1.90.0-nightly (fixture)", "1.90.0")).toThrow("does not match pinned");
+    expect(() => requirePinnedToolVersion("rustc", "rustc 1.90.0 (fixture)\n", "1.90.0")).not.toThrow();
+  });
   test("source, dependency and build inputs require a pinned root workspace at any depth", () => {
     expect(requireRustWorkspace(["src/index.ts", "docs/rust.md"])).toBe(false);
     for (const path of ["future/lib.rs", "other/Cargo.toml", ".cargo/config", "other/rust-toolchain"]) {
