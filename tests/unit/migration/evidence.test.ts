@@ -119,6 +119,58 @@ describe("migration evidence gate", () => {
 });
 
 describe("reviewed requirements and human observations", () => {
+  test("infrastructure still needs real evidence without acquiring Rust status", async () => {
+    const cap = bundle.capabilities[0]!;
+    cap.kind = "infrastructure";
+    cap.targetStage = "S0";
+    requirements = structuredClone(bundle);
+    bundle.stage = "S1";
+    expect((await check()).ok).toBe(true);
+    bundle.verifications[0]!.rustSha = candidateSha;
+    bundle.verifications[0]!.artifact = await save("result.json", JSON.stringify({ schemaVersion: 1, scenarioId: "SC-guard", status: "passed", tsSha, rustSha: candidateSha, assertions: ["outside unchanged"] }));
+    expect((await check()).ok).toBe(true);
+    bundle.verifications[0]!.rustSha = "c".repeat(40);
+    expect((await check()).errors.join()).toContain("Rust SHA mismatch");
+    bundle.verifications[0]!.rustSha = null;
+    bundle.verifications[0]!.artifact = await result("skipped");
+    expect((await check()).ok).toBe(false);
+    bundle.verifications[0]!.artifact = await result();
+    cap.rustStatus = "verified";
+    expect((await check()).errors.join()).toContain("infrastructure must not claim Rust implementation status");
+    cap.rustStatus = "not_started";
+    bundle.verifications = [];
+    expect((await check()).errors.join()).toContain("required evidence has not passed");
+  });
+  test("infrastructure cannot reclassify or share a preservation obligation", async () => {
+    bundle.capabilities[0]!.kind = "infrastructure";
+    expect((await check()).errors.join()).toContain("reviewed capabilities definition changed");
+    const preservation = { ...structuredClone(bundle.capabilities[0]!), id: "CAP-preserved", kind: "preservation" as const };
+    bundle.capabilities.push(preservation);
+    bundle.scenarios[0]!.capabilityIds.push(preservation.id);
+    requirements = structuredClone(bundle);
+    bundle.stage = "S1";
+    const checked = await check();
+    expect(checked.errors.join()).toContain("infrastructure and preservation ownership must be separate");
+    expect(checked.errors.join()).toContain("missing candidate evidence");
+  });
+  test("infrastructure human gates remain pending until an observed candidate is proved", async () => {
+    bundle.capabilities[0]!.kind = "infrastructure";
+    bundle.capabilities[0]!.targetStage = "S1";
+    bundle.scenarios[0]!.kind = "human";
+    bundle.scenarios[0]!.requiredStage = "S1";
+    const tsOnly = bundle.verifications[0]!;
+    bundle.verifications = [];
+    bundle.boundaryGates = [{ id: "H1", requiredBefore: "S2", scenarioIds: ["SC-guard"], package: await save("observe.md", "Inspect the exact native candidate."), observer: null, candidate: null, candidateSha: null, status: "pending", verificationIds: [] }];
+    requirements = structuredClone(bundle);
+    bundle.stage = "S1";
+    expect((await check()).ok).toBe(true);
+    bundle.stage = "S2";
+    expect((await check()).errors.join()).toContain("human gate is not observed and passed");
+    Object.assign(bundle.boundaryGates[0]!, { status: "passed", observer: "fixture observer", candidate: await save("candidate.bin", "native candidate"), candidateSha, verificationIds: [tsOnly.id] });
+    bundle.verifications = [tsOnly];
+    expect((await check()).errors.join()).toContain("missing candidate evidence");
+    expect((await check()).errors.join()).toContain("missing human evidence");
+  });
   test("execution reports cannot shrink scope or defer deadlines", async () => {
     bundle.scenarios[0]!.requiredStage = "S6";
     bundle.verifications = [];

@@ -1,0 +1,517 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "2bc4f9075214f72d7f930dd0dba173f1768afc2c",
+  "engines": [
+    {
+      "id": "dyad",
+      "displayName": "Prism Dyad Engine",
+      "protocolVersion": "v10.1-prompt-assembly",
+      "systemPrompt": [
+        "assets/prompts/host/runtime.md",
+        "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
+        "assets/prompts/engines/dyad.md"
+      ],
+      "defaultTools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file",
+        "view_image",
+        "create_file",
+        "create_directory",
+        "write_file",
+        "replace_in_file",
+        "append_file",
+        "delete_file",
+        "move_file",
+        "move_directory",
+        "delete_directory"
+      ],
+      "validators": [],
+      "stopGates": [],
+      "stateRoots": [
+        "workspace",
+        "test_runs"
+      ],
+      "source": "assets/engines/dyad.profile.yaml",
+      "sha256": "a88d725a314912b4ff72c9a739bdaacd76ab9d6d9e78348522d55f856ffa7baf",
+      "capabilityId": "CAP-ENGINE-DECLARATIONS"
+    },
+    {
+      "id": "etl",
+      "displayName": "Prism ETL Engine",
+      "protocolVersion": "v10.1-prompt-assembly",
+      "systemPrompt": [
+        "assets/prompts/host/authoring.md",
+        "assets/prompts/engines/etl.md"
+      ],
+      "defaultTools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file",
+        "view_image",
+        "create_file",
+        "create_directory",
+        "write_file",
+        "replace_in_file",
+        "append_file",
+        "delete_file",
+        "move_file",
+        "move_directory",
+        "delete_directory",
+        "copy_file",
+        "web_search",
+        "web_fetch",
+        "web_map",
+        "web_crawl",
+        "web_research"
+      ],
+      "validators": [
+        "character-card",
+        "scenario-card"
+      ],
+      "stopGates": [
+        "blueprint-confirmation",
+        "phase-confirmation"
+      ],
+      "stateRoots": [
+        "source_materials",
+        "workspace"
+      ],
+      "source": "assets/engines/etl.profile.yaml",
+      "sha256": "0b50135c4b438177deb245fe19a86e9544275d095fe2bfe20a18d78fe27be6d8",
+      "capabilityId": "CAP-ENGINE-DECLARATIONS"
+    },
+    {
+      "id": "evaluate",
+      "displayName": "Prism Evaluate Engine",
+      "protocolVersion": "v10.1-prompt-assembly",
+      "systemPrompt": [
+        "assets/prompts/host/review.md",
+        "assets/quality/anti-ai-flavor/review-brief.zh-CN.md",
+        "assets/prompts/engines/evaluate.md"
+      ],
+      "defaultTools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file",
+        "view_image",
+        "create_file",
+        "create_directory",
+        "write_file",
+        "replace_in_file",
+        "append_file",
+        "delete_file",
+        "move_file",
+        "move_directory",
+        "delete_directory",
+        "web_search",
+        "web_fetch",
+        "web_map",
+        "web_crawl",
+        "web_research"
+      ],
+      "validators": [
+        "evaluate-report"
+      ],
+      "stopGates": [],
+      "stateRoots": [
+        "source_materials",
+        "workspace",
+        "test_runs",
+        "novels",
+        "reports"
+      ],
+      "source": "assets/engines/evaluate.profile.yaml",
+      "sha256": "183ae1c2ac01c791c52644adf05cfec212ae6a1496593697e0ec4c4a0d52c877",
+      "capabilityId": "CAP-ENGINE-DECLARATIONS"
+    },
+    {
+      "id": "runtime",
+      "displayName": "Prism Runtime Engine",
+      "protocolVersion": "v10.1-prompt-assembly",
+      "systemPrompt": [
+        "assets/prompts/host/runtime.md",
+        "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
+        "assets/prompts/engines/runtime.md"
+      ],
+      "defaultTools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file",
+        "view_image",
+        "create_file",
+        "create_directory",
+        "write_file",
+        "replace_in_file",
+        "append_file",
+        "delete_file",
+        "move_file",
+        "move_directory",
+        "delete_directory"
+      ],
+      "validators": [
+        "runtime-packet"
+      ],
+      "stopGates": [
+        "runtime-turn"
+      ],
+      "stateRoots": [
+        "workspace",
+        "test_runs"
+      ],
+      "source": "assets/engines/runtime.profile.yaml",
+      "sha256": "937d811c54dfcf21ecfdfab7bb27974e72f1a8a4538c6616af1392c8f2061a22",
+      "capabilityId": "CAP-ENGINE-DECLARATIONS"
+    },
+    {
+      "id": "stage",
+      "displayName": "Prism Stage Engine",
+      "protocolVersion": "v10.1-prompt-assembly",
+      "systemPrompt": [
+        "assets/prompts/host/consumer-stage.md",
+        "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
+        "assets/prompts/engines/stage.md"
+      ],
+      "defaultTools": [],
+      "validators": [
+        "runtime-packet"
+      ],
+      "stopGates": [],
+      "stateRoots": [
+        "workspace"
+      ],
+      "source": "assets/engines/stage.profile.yaml",
+      "sha256": "4b011b3d1f03f3519609a6be84993ddbe86d8964967c1f87e7887bd78b042573",
+      "capabilityId": "CAP-ENGINE-DECLARATIONS"
+    },
+    {
+      "id": "weaver-orch",
+      "displayName": "Prism Weaver-Orch Engine",
+      "protocolVersion": "v10.1-prompt-assembly",
+      "systemPrompt": [
+        "assets/prompts/host/writing.md",
+        "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
+        "assets/prompts/engines/weaver-orch.md"
+      ],
+      "defaultTools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file",
+        "view_image",
+        "create_file",
+        "create_directory",
+        "write_file",
+        "replace_in_file",
+        "append_file",
+        "delete_file",
+        "move_file",
+        "move_directory",
+        "delete_directory",
+        "copy_file"
+      ],
+      "validators": [],
+      "stopGates": [],
+      "stateRoots": [
+        "workspace",
+        "novels",
+        "reports"
+      ],
+      "source": "assets/engines/weaver-orch.profile.yaml",
+      "sha256": "7dcc7aa04456c49c767ac360c1a307732f1b5120550f57d5cbb79fdcd48bd45b",
+      "capabilityId": "CAP-ENGINE-DECLARATIONS"
+    },
+    {
+      "id": "weaver",
+      "displayName": "Prism Weaver Engine",
+      "protocolVersion": "v10.1-prompt-assembly",
+      "systemPrompt": [
+        "assets/prompts/host/writing.md",
+        "assets/quality/anti-ai-flavor/generation-brief.zh-CN.md",
+        "assets/prompts/engines/weaver.md"
+      ],
+      "defaultTools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file",
+        "view_image",
+        "create_file",
+        "create_directory",
+        "write_file",
+        "replace_in_file",
+        "append_file",
+        "delete_file",
+        "move_file",
+        "move_directory",
+        "delete_directory"
+      ],
+      "validators": [],
+      "stopGates": [],
+      "stateRoots": [
+        "workspace",
+        "novels"
+      ],
+      "source": "assets/engines/weaver.profile.yaml",
+      "sha256": "f88a6999061924b119619c6a1249991dc29151fe121d45be7851d5eef9a40b62",
+      "capabilityId": "CAP-ENGINE-DECLARATIONS"
+    }
+  ],
+  "agents": [
+    {
+      "id": "chapter-reviewer",
+      "displayName": "Prism Chapter Reviewer",
+      "description": "Independently audit one compiled chapter against its cards, outline, Story Bible, and prose-quality rubric.",
+      "systemPrompt": [
+        "assets/prompts/host/review.md",
+        "assets/prompts/agents/quality/anti-ai-flavor.review-brief.md",
+        "assets/prompts/agents/chapter-reviewer.md"
+      ],
+      "tools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file",
+        "view_image",
+        "create_file",
+        "create_directory",
+        "write_file",
+        "replace_in_file",
+        "append_file",
+        "delete_file",
+        "move_file",
+        "move_directory",
+        "delete_directory"
+      ],
+      "contextMode": "fresh",
+      "modelPolicy": "inherit",
+      "defaultMode": "foreground",
+      "maxTurns": 20,
+      "source": "assets/agents/chapter-reviewer.agent.yaml",
+      "sha256": "55b1a6a6e05755e9a3d0798ed7b4edb1d4ed53120a487e50038a95165e02ee30",
+      "capabilityId": "CAP-AGENT-PROFILES"
+    },
+    {
+      "id": "continuity-editor",
+      "displayName": "Prism Continuity Editor",
+      "description": "Snapshot and synchronize one completed chapter into the Story Bible without writing prose or deciding the audit verdict.",
+      "systemPrompt": [
+        "assets/prompts/host/writing.md",
+        "assets/prompts/agents/continuity-editor.md"
+      ],
+      "tools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file",
+        "view_image",
+        "create_file",
+        "create_directory",
+        "write_file",
+        "replace_in_file",
+        "append_file",
+        "delete_file",
+        "move_file",
+        "move_directory",
+        "delete_directory",
+        "copy_file"
+      ],
+      "contextMode": "fresh",
+      "modelPolicy": "inherit",
+      "defaultMode": "foreground",
+      "maxTurns": 16,
+      "source": "assets/agents/continuity-editor.agent.yaml",
+      "sha256": "0933b90ec1c28f0f2db5ba6458465a25aef7671eeb892a3752488d8894090cf8",
+      "capabilityId": "CAP-AGENT-PROFILES"
+    },
+    {
+      "id": "scene-writer",
+      "displayName": "Prism Scene Writer",
+      "description": "Write one bounded scene shard from an orchestrator-supplied task packet without changing outline or story state.",
+      "systemPrompt": [
+        "assets/prompts/host/writing.md",
+        "assets/prompts/agents/quality/anti-ai-flavor.generation-brief.md",
+        "assets/prompts/agents/scene-writer.md"
+      ],
+      "tools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file",
+        "view_image",
+        "create_file",
+        "create_directory",
+        "write_file",
+        "replace_in_file",
+        "append_file",
+        "delete_file",
+        "move_file",
+        "move_directory",
+        "delete_directory"
+      ],
+      "contextMode": "fresh",
+      "modelPolicy": "inherit",
+      "defaultMode": "foreground",
+      "maxTurns": 20,
+      "source": "assets/agents/scene-writer.agent.yaml",
+      "sha256": "e43ba1185cb321d13440a9f46f5d4ddfffc479bf06abab83aa2741839e059ee1",
+      "capabilityId": "CAP-AGENT-PROFILES"
+    },
+    {
+      "id": "explore",
+      "displayName": "Explore Agent",
+      "description": "Explore large project or source-material collections and return evidence-rich findings.",
+      "systemPrompt": [
+        "assets/prompts/agents/base.md",
+        "assets/prompts/agents/explore.md"
+      ],
+      "tools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file",
+        "view_image"
+      ],
+      "contextMode": "fresh",
+      "modelPolicy": "inherit",
+      "defaultMode": "background",
+      "maxTurns": 24,
+      "source": "host-assets/agents/explore.agent.yaml",
+      "sha256": "b8018bfd32228b13a1d17cfe84cc02154b5d2265c8cbecad5131717775555dbe",
+      "capabilityId": "CAP-AGENT-PROFILES"
+    },
+    {
+      "id": "general",
+      "displayName": "General Agent",
+      "description": "Execute one focused delegated task with the explicitly available tools.",
+      "systemPrompt": [
+        "assets/prompts/agents/base.md",
+        "assets/prompts/agents/general.md"
+      ],
+      "tools": [
+        "*"
+      ],
+      "contextMode": "summary",
+      "modelPolicy": "inherit",
+      "defaultMode": "foreground",
+      "maxTurns": 32,
+      "source": "host-assets/agents/general.agent.yaml",
+      "sha256": "4c24c1fe90cb255e1122c173c5aa0b50ecac4fe252058c9ad94cd325f3fe843f",
+      "capabilityId": "CAP-AGENT-PROFILES"
+    },
+    {
+      "id": "plan",
+      "displayName": "Plan Agent",
+      "description": "Convert a supplied goal and context into a concrete executable plan.",
+      "systemPrompt": [
+        "assets/prompts/agents/base.md",
+        "assets/prompts/agents/plan.md"
+      ],
+      "tools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file"
+      ],
+      "contextMode": "summary",
+      "modelPolicy": "inherit",
+      "defaultMode": "foreground",
+      "maxTurns": 16,
+      "source": "host-assets/agents/plan.agent.yaml",
+      "sha256": "a5e06ecccaac7916cd420c3f7d64575d0725e082cf41226cfe4b349407a79eea",
+      "capabilityId": "CAP-AGENT-PROFILES"
+    },
+    {
+      "id": "research",
+      "displayName": "Research Agent",
+      "description": "Investigate a focused question using project and web evidence with source attribution.",
+      "systemPrompt": [
+        "assets/prompts/agents/base.md",
+        "assets/prompts/agents/research.md"
+      ],
+      "tools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file",
+        "view_image",
+        "web_search",
+        "web_fetch",
+        "web_map",
+        "web_crawl",
+        "web_research"
+      ],
+      "contextMode": "fresh",
+      "modelPolicy": "inherit",
+      "defaultMode": "background",
+      "maxTurns": 24,
+      "source": "host-assets/agents/research.agent.yaml",
+      "sha256": "603f56ab68154ade91e163255a1ede9d0dcb8b24127555f7a814b6776566eecb",
+      "capabilityId": "CAP-AGENT-PROFILES"
+    },
+    {
+      "id": "reviewer",
+      "displayName": "Reviewer Agent",
+      "description": "Independently review supplied artifacts, evidence, or decisions and report actionable findings.",
+      "systemPrompt": [
+        "assets/prompts/agents/base.md",
+        "assets/prompts/agents/reviewer.md"
+      ],
+      "tools": [
+        "stat_path",
+        "list_directory",
+        "grep_files",
+        "read_file",
+        "view_image"
+      ],
+      "contextMode": "summary",
+      "modelPolicy": "inherit",
+      "defaultMode": "background",
+      "maxTurns": 20,
+      "source": "host-assets/agents/reviewer.agent.yaml",
+      "sha256": "15a232ea1f5b33d5045b5fc72f01c83b9a1a957ad40d38dc9eae91cab64f0678",
+      "capabilityId": "CAP-AGENT-PROFILES"
+    }
+  ],
+  "conditions": [
+    "These are declarations, not the final dynamically filtered model tool surface.",
+    "Host instruction/gate/Agent/Skill tools and MCP discovery have separate runtime admission.",
+    "Agent wildcard means inherited permitted surface, never additional authority.",
+    "Model-requested Engine switching excludes Stage; Stage requires its dedicated card bootstrap."
+  ],
+  "customAgents": {
+    "scope": "Project/user asset overlays with strict profile schema and immutable session/Harness identity rules",
+    "contextModes": [
+      "fresh",
+      "summary",
+      "fork"
+    ],
+    "modelPolicies": [
+      "inherit"
+    ],
+    "modes": [
+      "foreground",
+      "background"
+    ],
+    "forbiddenChildTools": [
+      "request_confirmation",
+      "request_engine_switch",
+      "ask_user_question",
+      "read_instructions",
+      "update_instructions",
+      "spawn_agent",
+      "list_agents",
+      "send_message",
+      "interrupt_agent",
+      "wait_agent",
+      "shell_exec",
+      "shell_output",
+      "shell_stop"
+    ],
+    "sourceAnchor": "src/core/agents/tool-scope.ts"
+  }
+}

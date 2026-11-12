@@ -1,0 +1,1051 @@
+{
+  "schemaVersion": 1,
+  "sourceBaseline": "2bc4f9075214f72d7f930dd0dba173f1768afc2c",
+  "commands": [
+    {
+      "id": "TUI-STAGE",
+      "name": "stage",
+      "aliases": [],
+      "grammar": "/stage <character-card-path> <scenario-card-path>",
+      "busyBehavior": "after-agent-loop",
+      "behavior": "Start a new Stage narrative session from two cards",
+      "source": "src/tui/commands/agents.ts",
+      "sourceHash": "fd8d795b9a57ca213f7fb87d5fb19e8e1cfad257f53cfc87d61d3385c4591a57",
+      "targetStage": "S4",
+      "providerCalls": "Stage startup according to card bootstrap",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-BTW",
+      "name": "btw",
+      "aliases": [],
+      "grammar": "/btw <question>",
+      "busyBehavior": "immediate",
+      "behavior": "Ask a temporary question about the current conversation",
+      "source": "src/tui/commands/agents.ts",
+      "sourceHash": "fd8d795b9a57ca213f7fb87d5fb19e8e1cfad257f53cfc87d61d3385c4591a57",
+      "targetStage": "S4",
+      "providerCalls": "isolated tool-free side request",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-AGENTS",
+      "name": "agents",
+      "aliases": [],
+      "grammar": "/agents [handle|stop <handle>|retry]",
+      "busyBehavior": "retry after-agent-loop; list/inspect/stop immediate",
+      "behavior": "List profiles and children, inspect or interrupt one handle, or retry durable delivery.",
+      "source": "src/tui/commands/agents.ts",
+      "sourceHash": "fd8d795b9a57ca213f7fb87d5fb19e8e1cfad257f53cfc87d61d3385c4591a57",
+      "targetStage": "S4",
+      "providerCalls": "retry may notify the scheduler, deliver child results and resume the parent provider continuation; list/inspect/stop are host actions.",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-ENGINE",
+      "name": "engine",
+      "aliases": [],
+      "grammar": "/engine [id] [--summary [instructions]]",
+      "busyBehavior": "status immediate; selection after-agent-loop",
+      "behavior": "List engines or persist a future-turn Engine selection; summary explicitly performs compaction first; Stage requires its card bootstrap.",
+      "source": "src/tui/commands/engine.ts",
+      "sourceHash": "820371e2e43f291f35e0c92a7b6f36b765873737424862acf3f10f82144dd5e0",
+      "targetStage": "S4",
+      "providerCalls": "only --summary compaction",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-INSTRUCTIONS",
+      "name": "instructions",
+      "aliases": [],
+      "grammar": "/instructions",
+      "busyBehavior": "immediate",
+      "behavior": "Inspect effective persistent instruction sources, hashes, byte budget and diagnostics without a provider call.",
+      "source": "src/tui/commands/engine.ts",
+      "sourceHash": "820371e2e43f291f35e0c92a7b6f36b765873737424862acf3f10f82144dd5e0",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-HELP",
+      "name": "help",
+      "aliases": [],
+      "grammar": "/help",
+      "busyBehavior": "immediate",
+      "behavior": "Show available commands",
+      "source": "src/tui/commands/help.ts",
+      "sourceHash": "5462875a2b978ac3c69b807626a61792cadafa86af061f2c0f7ec948f2e25ad8",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-PERMISSIONS",
+      "name": "permissions",
+      "aliases": [],
+      "grammar": "/permissions [MANUAL|INERTIA|MOMENTUM|YOLO]",
+      "busyBehavior": "status immediate; mutation after-agent-loop",
+      "behavior": "Change approval friction only, with the YOLO confirmation flow and no widened capabilities.",
+      "source": "src/tui/commands/permissions.ts",
+      "sourceHash": "d4307d8095232d5975b09798ef8c1dcfb256643a3fef20f8ff552dfb067af062",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-CONTEXT",
+      "name": "context",
+      "aliases": [],
+      "grammar": "/context",
+      "busyBehavior": "immediate",
+      "behavior": "Show current context window usage",
+      "source": "src/tui/commands/provider.ts",
+      "sourceHash": "4632e15b3f4d17b99ba0610bc6be2c2f7d212ceb5a0d8a167d33605f6adc44e4",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-MODEL",
+      "name": "model",
+      "aliases": [],
+      "grammar": "/model [provider] [model]",
+      "busyBehavior": "after-agent-loop",
+      "behavior": "Switch provider/model (no args opens a picker)",
+      "source": "src/tui/commands/provider.ts",
+      "sourceHash": "4632e15b3f4d17b99ba0610bc6be2c2f7d212ceb5a0d8a167d33605f6adc44e4",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-EFFORT",
+      "name": "effort",
+      "aliases": [],
+      "grammar": "/effort [off|low|medium|high|xhigh|max|auto]",
+      "busyBehavior": "status immediate; mutation after-agent-loop",
+      "behavior": "Persist thinking effort for future turns; auto removes the override.",
+      "source": "src/tui/commands/provider.ts",
+      "sourceHash": "4632e15b3f4d17b99ba0610bc6be2c2f7d212ceb5a0d8a167d33605f6adc44e4",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state.",
+      "argumentAliases": {
+        "unset": "auto",
+        "default": "auto"
+      }
+    },
+    {
+      "id": "TUI-REASONING",
+      "name": "reasoning",
+      "aliases": [],
+      "grammar": "/reasoning [hidden|collapsed|expanded]",
+      "busyBehavior": "immediate",
+      "behavior": "Set reasoning display mode",
+      "source": "src/tui/commands/provider.ts",
+      "sourceHash": "4632e15b3f4d17b99ba0610bc6be2c2f7d212ceb5a0d8a167d33605f6adc44e4",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state.",
+      "argumentAliases": {
+        "off": "hidden",
+        "preview": "collapsed",
+        "on": "expanded",
+        "hide": "hidden",
+        "collapse": "collapsed",
+        "fold": "collapsed",
+        "expand": "expanded",
+        "show": "expanded"
+      }
+    },
+    {
+      "id": "TUI-QUALITY",
+      "name": "quality",
+      "aliases": [],
+      "grammar": "/quality [status|off|observe [provider model [timeout-ms]]|rewrite [provider model [timeout-ms]]]",
+      "busyBehavior": "status immediate; every other form after-agent-loop",
+      "behavior": "Configure experimental off/observe/rewrite; off retains tuple, rewrite requires one confirmation panel; stale/keyless tuple routes to explicit selection.",
+      "source": "src/tui/commands/quality.ts",
+      "sourceHash": "bcf008fcd19e9fb2dead42af69a5da06b434fb7f0808480c6d8f8a7791aaab69",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-TITLE",
+      "name": "title",
+      "aliases": [],
+      "grammar": "/title [rename <text>|regenerate]",
+      "busyBehavior": "immediate",
+      "behavior": "View, rename, or regenerate the session title",
+      "source": "src/tui/commands/session.ts",
+      "sourceHash": "08d54206bc9c179b66b5f456c96f1c79b4740aad642fb52f68797f587b2354b4",
+      "targetStage": "S4",
+      "providerCalls": "regenerate schedules automatic title generation when eligible",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-COMPACT",
+      "name": "compact",
+      "aliases": [],
+      "grammar": "/compact [summary instructions]",
+      "busyBehavior": "after-agent-loop",
+      "behavior": "Summarize this session and replace old provider context",
+      "source": "src/tui/commands/session.ts",
+      "sourceHash": "08d54206bc9c179b66b5f456c96f1c79b4740aad642fb52f68797f587b2354b4",
+      "targetStage": "S4",
+      "providerCalls": "summary generation",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-INIT",
+      "name": "init",
+      "aliases": [],
+      "grammar": "/init [--force] [notes]",
+      "busyBehavior": "after-agent-loop",
+      "behavior": "Scan the project and generate a VESICLE.md of persistent instructions",
+      "source": "src/tui/commands/session.ts",
+      "sourceHash": "08d54206bc9c179b66b5f456c96f1c79b4740aad642fb52f68797f587b2354b4",
+      "targetStage": "S4",
+      "providerCalls": "instruction generation",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-REWIND",
+      "name": "rewind",
+      "aliases": [
+        "checkpoint"
+      ],
+      "grammar": "/rewind",
+      "busyBehavior": "after-agent-loop",
+      "behavior": "Restore code and/or conversation to an earlier point",
+      "source": "src/tui/commands/session.ts",
+      "sourceHash": "08d54206bc9c179b66b5f456c96f1c79b4740aad642fb52f68797f587b2354b4",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-BRANCH",
+      "name": "branch",
+      "aliases": [],
+      "grammar": "/branch",
+      "busyBehavior": "after-agent-loop",
+      "behavior": "Browse and switch candidate branches at any depth (Ctrl+B)",
+      "source": "src/tui/commands/session.ts",
+      "sourceHash": "08d54206bc9c179b66b5f456c96f1c79b4740aad642fb52f68797f587b2354b4",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-NEW",
+      "name": "new",
+      "aliases": [],
+      "grammar": "/new",
+      "busyBehavior": "after-agent-loop",
+      "behavior": "Start a fresh session",
+      "source": "src/tui/commands/session.ts",
+      "sourceHash": "08d54206bc9c179b66b5f456c96f1c79b4740aad642fb52f68797f587b2354b4",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-RESUME",
+      "name": "resume",
+      "aliases": [],
+      "grammar": "/resume [n|id]",
+      "busyBehavior": "after-agent-loop",
+      "behavior": "Resume a saved session",
+      "source": "src/tui/commands/session.ts",
+      "sourceHash": "08d54206bc9c179b66b5f456c96f1c79b4740aad642fb52f68797f587b2354b4",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-SKILL",
+      "name": "skill",
+      "aliases": [],
+      "grammar": "/skill [refresh | name [task|--context-only]]",
+      "busyBehavior": "picker or trailing --context-only immediate; refresh/invoke after-agent-loop",
+      "behavior": "Picker, activation, optional invocation or explicit catalog refresh; refresh is reserved and rejects context-only/task operands.",
+      "source": "src/tui/commands/skills.ts",
+      "sourceHash": "f55eda5f10c5e5dc24a24c2780d8bf1387884e702a6f0db79a4a15873b52e495",
+      "targetStage": "S4",
+      "providerCalls": "only invocation, not picker/context-only/refresh",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-THEME",
+      "name": "theme",
+      "aliases": [],
+      "grammar": "/theme [dark|light|default|auto] [--persist] [--unset-project]",
+      "busyBehavior": "immediate",
+      "behavior": "Show or set the colour theme",
+      "source": "src/tui/commands/theme.ts",
+      "sourceHash": "ffc8703eeededae652331b1b33f9915cb6775fe4f55a4b4c873c99838318932b",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-WEBSEARCH",
+      "name": "websearch",
+      "aliases": [],
+      "grammar": "/websearch [on|off]",
+      "busyBehavior": "status immediate; mutation after-agent-loop",
+      "behavior": "Apply a process/session override only if protocol/profile/model/Engine tool surface all admit native search; new/resume resets it.",
+      "source": "src/tui/commands/websearch.ts",
+      "sourceHash": "eee411df15f6cecf67e5d87979faa76dc952c8c45721b9cef1b7f7d527f0be7e",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-WORKSPACE",
+      "name": "workspace",
+      "aliases": [],
+      "grammar": "/workspace [path]",
+      "busyBehavior": "immediate",
+      "behavior": "Open the Workspace page, optionally locating a file or directory",
+      "source": "src/tui/commands/workspace.ts",
+      "sourceHash": "7ca92f7a5495ee6b2fe6e7c3d98fcbcdff577940c2ff1d60bf0f9c11465be52a",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-ARTIFACT",
+      "name": "artifact",
+      "aliases": [],
+      "grammar": "/artifact [n|path]",
+      "busyBehavior": "after-tool-round",
+      "behavior": "Open artifacts in the Workspace page (no args = latest)",
+      "source": "src/tui/commands/workspace.ts",
+      "sourceHash": "7ca92f7a5495ee6b2fe6e7c3d98fcbcdff577940c2ff1d60bf0f9c11465be52a",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    },
+    {
+      "id": "TUI-VALIDATE",
+      "name": "validate",
+      "aliases": [],
+      "grammar": "/validate <n|path>",
+      "busyBehavior": "after-tool-round",
+      "behavior": "Validate an artifact file",
+      "source": "src/tui/commands/workspace.ts",
+      "sourceHash": "7ca92f7a5495ee6b2fe6e7c3d98fcbcdff577940c2ff1d60bf0f9c11465be52a",
+      "targetStage": "S4",
+      "providerCalls": "none from the command; downstream explicit decisions retain their own contracts",
+      "negativeCase": "Malformed arguments or unavailable target must report an actionable outcome without silently changing unrelated session state."
+    }
+  ],
+  "keyboardContexts": [
+    {
+      "id": "KEY-001",
+      "context": "Input-box keys",
+      "keys": "Enter",
+      "behavior": "Send while idle; queue ordinary messages and deferred commands while the Agent Loop is running",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-002",
+      "context": "Input-box keys",
+      "keys": "Ctrl+Enter",
+      "behavior": "Newline",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-003",
+      "context": "Input-box keys",
+      "keys": "Up (running turn, empty box)",
+      "behavior": "Retrieve the latest queued input for editing",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-004",
+      "context": "Input-box keys",
+      "keys": "Esc",
+      "behavior": "Interrupt the current provider or tool operation; after rebuilding the interrupted session, submit the captured FIFO head once — only if it is still the queue head — or just interrupt when the queue is empty",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-005",
+      "context": "Input-box keys",
+      "keys": "Double Esc (empty box, within 800ms)",
+      "behavior": "Open the rewind picker",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-006",
+      "context": "Input-box keys",
+      "keys": "Double Esc (box has text)",
+      "behavior": "Save the draft and clear it, without sending",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-007",
+      "context": "Input-box keys",
+      "keys": "Ctrl+V / Alt/Option+V",
+      "behavior": "Paste a clipboard image (only vision-capable models receive it; terminal text paste still inserts text normally)",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-008",
+      "context": "Input-box keys",
+      "keys": "`Ctrl+R` (Chat page)",
+      "behavior": "Re-run the last turn as a new candidate (the old one is kept); in Workspace, `Ctrl+R` keeps its file-reload meaning",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-009",
+      "context": "Input-box keys",
+      "keys": "`Option+←/→`",
+      "behavior": "Switch between the current turn's candidates",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-010",
+      "context": "Input-box keys",
+      "keys": "`Ctrl+B`",
+      "behavior": "Open the candidate-tree panel to browse and switch candidate branches at any depth (both pages)",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-011",
+      "context": "Input-box keys",
+      "keys": "`Alt/Option+↑/↓`",
+      "behavior": "Move the turn-focus cursor across the whole transcript (wraps); the focused turn's prompt and final reply are highlighted",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-012",
+      "context": "Input-box keys",
+      "keys": "Ctrl+Q",
+      "behavior": "Exit Vesicle",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-013",
+      "context": "Interactive prompt keys — Key (options zone)",
+      "keys": "↑ / ↓ / Ctrl+P / Ctrl+N",
+      "behavior": "Move focus between the options",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-014",
+      "context": "Interactive prompt keys — Key (options zone)",
+      "keys": "Type / paste directly",
+      "behavior": "Expands the focused confirm option's note input on stop-gate and engine-switch prompts; permission prompts carry notes only on Reject (always-on input). Esc clears the note and returns to the options",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-015",
+      "context": "Interactive prompt keys — Key (options zone)",
+      "keys": "Enter",
+      "behavior": "Submit the focused option; a typed note is submitted with the decision (permission Allow takes no note)",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-016",
+      "context": "Interactive prompt keys — Key (options zone)",
+      "keys": "Tab / Shift+Tab",
+      "behavior": "Read the dialog or selected item's details",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-017",
+      "context": "Interactive prompt keys — Key (options zone)",
+      "keys": "Esc",
+      "behavior": "Clear the note and move focus to Reject",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-018",
+      "context": "Interactive prompt keys — Key (body zone)",
+      "keys": "↑ / ↓ / Ctrl+P / Ctrl+N",
+      "behavior": "Scroll details line by line; the position indicator shows the visible range",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-019",
+      "context": "Interactive prompt keys — Key (body zone)",
+      "keys": "Mouse wheel",
+      "behavior": "Scroll expanded details; the reading position is shared with the arrow keys",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-020",
+      "context": "Interactive prompt keys — Key (body zone)",
+      "keys": "Home / End",
+      "behavior": "Jump to the top / bottom",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-021",
+      "context": "Interactive prompt keys — Key (body zone)",
+      "keys": "Tab / Shift+Tab / Enter / Esc",
+      "behavior": "Return to the options without submitting, rejecting or clearing a note",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-022",
+      "context": "File tree and read-only viewer",
+      "keys": "Ctrl+P or / (tree focus)",
+      "behavior": "Quick open: subsequence fuzzy match across project files; Enter opens, Esc closes",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-023",
+      "context": "File tree and read-only viewer",
+      "keys": "↑ / ↓ (tree)",
+      "behavior": "Move the selection",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-024",
+      "context": "File tree and read-only viewer",
+      "keys": "→ / Enter (tree)",
+      "behavior": "Expand a directory, or open a file and hand focus to the viewer/editor",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-025",
+      "context": "File tree and read-only viewer",
+      "keys": "← (tree)",
+      "behavior": "Collapse a directory or move to the parent",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-026",
+      "context": "File tree and read-only viewer",
+      "keys": "a (tree)",
+      "behavior": "Create a file (path input bar; `a/b/c.md` works, parents are created; an existing target is refused, not overwritten)",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-027",
+      "context": "File tree and read-only viewer",
+      "keys": "A (tree, Shift+a)",
+      "behavior": "Create a directory",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-028",
+      "context": "File tree and read-only viewer",
+      "keys": "m / F2 (tree)",
+      "behavior": "Move / rename (input bar prefills the directory prefix; type the new name; an existing target opens an overwrite confirm)",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-029",
+      "context": "File tree and read-only viewer",
+      "keys": "c (tree)",
+      "behavior": "Copy (same rules as `m`)",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-030",
+      "context": "File tree and read-only viewer",
+      "keys": "d (tree)",
+      "behavior": "Delete: `y` deletes (moves to the `.vesicle/trash/` recycle bin); any other key cancels; directories only when empty; unsaved edits are noted in the confirm",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-031",
+      "context": "File tree and read-only viewer",
+      "keys": "v (tree)",
+      "behavior": "Validate the **selection**: a selected file validates and opens findings; a directory or empty selection shows `select a file to validate`; a file with unsaved edits shows `save <path> before validating`",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-032",
+      "context": "File tree and read-only viewer",
+      "keys": "v (read-only viewer)",
+      "behavior": "Validate the open file and open findings (labelled `v findings` when a current result exists)",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-033",
+      "context": "File tree and read-only viewer",
+      "keys": "h / j / k / l (tree/read-only viewer)",
+      "behavior": "Alias for the arrow keys (inert while a text input is active)",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-034",
+      "context": "File tree and read-only viewer",
+      "keys": "q (tree/read-only viewer)",
+      "behavior": "Alias for Esc — step focus back one level",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-035",
+      "context": "File tree and read-only viewer",
+      "keys": "r (tree)",
+      "behavior": "Refresh the directory; (read-only viewer) re-read the file",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-036",
+      "context": "File tree and read-only viewer",
+      "keys": ". (tree)",
+      "behavior": "Show/hide dotfiles and noisy directories (`.git`, `node_modules`, `dist`, …)",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-037",
+      "context": "File tree and read-only viewer",
+      "keys": "↑ / ↓ / PgUp / PgDn / Home / End (read-only viewer)",
+      "behavior": "Scroll",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-038",
+      "context": "File tree and read-only viewer",
+      "keys": "m (Markdown preview / read-only source)",
+      "behavior": "Toggle preview and source: an editable Markdown shows `m edit`; a read-only/oversized/truncated Markdown shows `m source` (read-only source) or `m preview`; a metadata-only symlink offers no toggle",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-039",
+      "context": "Editor (editable source focus)",
+      "keys": "Ctrl+S",
+      "behavior": "Save (atomic write, project-root-bounded, rejects `..` and absolute paths); re-runs validation on save",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-040",
+      "context": "Editor (editable source focus)",
+      "keys": "Ctrl+Shift+S",
+      "behavior": "Save as (type a new path)",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-041",
+      "context": "Editor (editable source focus)",
+      "keys": "Ctrl+Z / Ctrl+Y",
+      "behavior": "Undo / redo",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-042",
+      "context": "Editor (editable source focus)",
+      "keys": "Ctrl+F",
+      "behavior": "Find: locate as you type, Enter next, Shift+Enter previous, Esc close",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-043",
+      "context": "Editor (editable source focus)",
+      "keys": "Ctrl+G",
+      "behavior": "Go to line (type a line number)",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-044",
+      "context": "Editor (editable source focus)",
+      "keys": "Ctrl+R",
+      "behavior": "Reload the on-disk version (confirms if there are local edits or the disk changed)",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-045",
+      "context": "Editor (editable source focus)",
+      "keys": "Tab",
+      "behavior": "Insert two spaces of indentation",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-046",
+      "context": "Editor (editable source focus)",
+      "keys": "Esc",
+      "behavior": "With unsaved edits: \"save / discard / cancel\"; otherwise step back one level",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-047",
+      "context": "`/btw` side questions",
+      "keys": "Esc / Space / Enter (complete/error)",
+      "behavior": "Close the overlay and return to the main surface",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-048",
+      "context": "`/btw` side questions",
+      "keys": "Esc (loading)",
+      "behavior": "Cancel only the side request and close, leaving the main turn running",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-049",
+      "context": "`/btw` side questions",
+      "keys": "↑ / ↓",
+      "behavior": "Scroll the current answer",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-050",
+      "context": "`/btw` side questions",
+      "keys": "← / →",
+      "behavior": "Move between this session's side exchanges",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-051",
+      "context": "`/btw` side questions",
+      "keys": "c",
+      "behavior": "Copy the current answer's raw Markdown",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-052",
+      "context": "`/btw` side questions",
+      "keys": "x",
+      "behavior": "Clear all of this session's side exchanges and close",
+      "anchors": [
+        "docs/user/en/reference/commands.md",
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-053",
+      "context": "Global before all surfaces",
+      "keys": "Ctrl+C",
+      "behavior": "Copy selected text and clear selection; without a selection, a second press within 3000ms exits.",
+      "anchors": [
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-054",
+      "context": "Startup splash",
+      "keys": "Any non-exit key",
+      "behavior": "Dismiss splash and consume the key without editing composer or choosing a panel option.",
+      "anchors": [
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-055",
+      "context": "Chat or Workspace excluding splash/BTW overlay",
+      "keys": "Ctrl+O",
+      "behavior": "Toggle pages ahead of bottom-modal or reading capture; preserve pending decision and reader state.",
+      "anchors": [
+        "src/tui/input-routing.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-056",
+      "context": "Chat artifact sidebar visible and nonempty",
+      "keys": "Alt+A; Up/Down; Enter; Esc",
+      "behavior": "Enter artifact focus, select, open the focused artifact, or leave focus; full relative path remains visible.",
+      "anchors": [
+        "src/tui/artifact-focus.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-057",
+      "context": "Workspace focus regions",
+      "keys": "F6; Shift+F6",
+      "behavior": "Cycle tree/viewer/composer, skipping viewer when no file is open.",
+      "anchors": [
+        "src/tui/workspace/controller.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-058",
+      "context": "Composer completion menu",
+      "keys": "Up/Down; Ctrl+P/N; Tab/Enter; Esc",
+      "behavior": "Select and complete slash command or guarded argument without also scrolling transcript; Esc clears the composer; Enter submits when the selected input is already complete.",
+      "anchors": [
+        "src/tui/command-completion-controller.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-059",
+      "context": "Composer ordinary editing",
+      "keys": "Left/Right; Home/End; Backspace/Delete; Up/Down",
+      "behavior": "Move/edit by composer semantics; wrapped rows own Up/Down before history; modified arrows do not leak to the transcript.",
+      "anchors": [
+        "src/tui/composer.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-060",
+      "context": "Composer newline compatibility",
+      "keys": "Shift+Enter; trailing backslash+Enter",
+      "behavior": "Distinct Shift+Enter is inert; trailing backslash+Enter inserts a newline.",
+      "anchors": [
+        "src/tui/composer.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-061",
+      "context": "Workspace findings panel",
+      "keys": "Up/Down; Enter; Esc",
+      "behavior": "Select findings; Enter jumps only for an editable target; Esc closes without an edit.",
+      "anchors": [
+        "src/tui/workspace/validation-owner.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-062",
+      "context": "Workspace local path/find/goto/confirmation input",
+      "keys": "Text/paste; Enter; Esc",
+      "behavior": "Dialog owns editing and confirmation; typed letters do not invoke tree file operations.",
+      "anchors": [
+        "src/tui/workspace/input-router.ts"
+      ],
+      "targetStage": "S4"
+    },
+    {
+      "id": "KEY-063",
+      "context": "Workspace tree/viewer/editor/composer with an open file",
+      "keys": "Ctrl+X",
+      "behavior": "Suspend the TUI for external editor handoff, refusing unsaved buffers; resume and refresh/validate on return.",
+      "anchors": [
+        "src/tui/workspace/controller.ts",
+        "src/tui/workspace/external-editor-runtime.ts"
+      ],
+      "targetStage": "S4"
+    }
+  ],
+  "precedence": [
+    "Global copy/exit",
+    "Startup splash",
+    "BTW overlay",
+    "Ctrl+O page switch",
+    "Expanded reading",
+    "Active bottom surface (decisions suppressed on Workspace; pickers/confirms remain modal)",
+    "Workspace/controller, artifact focus, Stage/candidate interaction and composer according to current focus"
+  ],
+  "queueContract": [
+    "Immediate host actions do not split an active provider tool round.",
+    "after-tool-round inputs are consumed before the next provider request; after-agent-loop commands wait for the loop.",
+    "Opening a picker pauses queue drain; session switch/reset clears the queue.",
+    "Workspace pending decision strip keeps focus in workspace and preserves composer draft; Enter neither sends nor queues until answered."
+  ],
+  "limitations": [
+    "These are context-qualified preservation requirements, not proof of native terminal event reporting. Native CJK/IME/clipboard/editor observations remain distinct lanes.",
+    "src/tui/keymap.ts is an unused legacy two-string stub; actual routing is input-routing.ts and the focused controllers."
+  ]
+}

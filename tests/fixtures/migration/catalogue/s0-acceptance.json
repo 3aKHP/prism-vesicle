@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "scope": "S0 autonomous infrastructure acceptance only; no Rust parity or live provider success is implied.",
+  "scenarios": [
+    {
+      "id": "SC-S0-ORACLE-COMPARE",
+      "action": "Run compare.ts and self-check.ts on two independently retained oracle runs.",
+      "assertions": [
+        "all five complete observations match",
+        "six damaged evidence variants rejected"
+      ],
+      "negativeCase": "Changed semantic output or raw data accepted after recomputing only a hash."
+    },
+    {
+      "id": "SC-S0-CORPUS-COMPARE",
+      "action": "Run corpus-compare.ts and corpus-self-check.ts on two independent 23-case corpus runs.",
+      "assertions": [
+        "all 23 complete observations match",
+        "seven damaged corpus variants rejected"
+      ],
+      "negativeCase": "Failed RUN or inconsistent manifest accepted."
+    },
+    {
+      "id": "SC-S0-RESOURCE-BASELINE",
+      "action": "Build the pinned release binary and execute scripts/probe/migration/resources.py under its bounded Linux PTY protocol.",
+      "assertions": [
+        "binary/source/script identities and all manifest hashes verified",
+        "empty and 1000-turn history windows completed",
+        "stream and cancel observations retained",
+        "both TUI runs exited zero without forced cleanup"
+      ],
+      "negativeCase": "A dead child, truncated output, missing observation or forced exit is reported as a valid resource baseline."
+    },
+    {
+      "id": "SC-S0-INVENTORY",
+      "action": "Scan the selected TS checkout, compare every entry to reviewed fixed dispositions and check all capability/scenario references, input hashes and stage deadlines.",
+      "assertions": [
+        "every scanned entry has one explicit disposition",
+        "no unclassified source delta",
+        "all preservation requirements have linked scenarios",
+        "independent semantic review has no unresolved Blocking or Should-fix"
+      ],
+      "negativeCase": "A new entry or changed source hash silently reuses an old classification."
+    },
+    {
+      "id": "SC-S0-VERIFICATION",
+      "action": "Run required TS lint/typecheck/tests/doctor, evidence corruption tests, docs synchronization/changelog pairing and relevant migration checks; retain commands and skips.",
+      "assertions": [
+        "lint and typecheck passed",
+        "required deterministic tests passed with unavailable live lanes explicitly skipped",
+        "doctor reported no missing required runtime inputs",
+        "evidence checker rejects missing entry wrong hash and skipped-as-pass"
+      ],
+      "negativeCase": "A skipped/unavailable result becomes passing evidence or a failed required check is ignored."
+    },
+    {
+      "id": "SC-S0-REVIEW-CI",
+      "action": "Bind accepted stage slices to exact heads, independent reviews and actual source/package/Linux/native Windows CI jobs; document owner-waived Bot separately.",
+      "assertions": [
+        "independent applicable reviews resolved",
+        "required CI jobs passed at accepted heads",
+        "native Windows consumer evidence is actual Windows CI",
+        "Bot is owner-waived and never labeled passed"
+      ],
+      "negativeCase": "Evidence from another commit/platform or a truncated Bot result is presented as a successful required check."
+    },
+    {
+      "id": "SC-S0-RUST-ROUTING",
+      "action": "Run routing regressions and an isolated synthetic Cargo workspace; prove Rust/build changes cannot bypass review and every Cargo phase uses the exact pin.",
+      "assertions": [
+        "all Rust inputs trigger all five review lenses",
+        "incomplete or orphan workspace rejected",
+        "synthetic pinned Cargo phases executed",
+        "absent application Rust workspace explicitly skipped"
+      ],
+      "negativeCase": "Tiny/deleted Rust input avoids review or inherited cargo ignores the pin."
+    }
+  ],
+  "resourceConditions": {
+    "pty": "100x28",
+    "emptyWindowSeconds": 20,
+    "longWindowSeconds": 20,
+    "syntheticTurns": 1000,
+    "versionRuns": 5,
+    "maxLoopbackRequests": 2,
+    "coldCache": "unavailable",
+    "thresholds": "observations only, no performance pass threshold"
+  }
+}

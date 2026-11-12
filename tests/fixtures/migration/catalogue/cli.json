@@ -1,0 +1,525 @@
+{
+  "schemaVersion": 1,
+  "sourceBaseline": "2bc4f9075214f72d7f930dd0dba173f1768afc2c",
+  "commands": [
+    {
+      "id": "CLI-LAUNCH-BARE",
+      "invocation": "vesicle [flags] [--] [project-directory]",
+      "source": "src/cli/args.ts",
+      "sourceHash": "96422f775edb9c984f3f58479474bd5cc40a52777de1a6d8256587592ca58b29",
+      "behavior": "Bare launch keeps cwd; one explicit directory is resolved and launched as project cwd. -- protects dash-prefixed directory names. --resume/-r opens the session picker. --dark/--light set initial theme. Process-scoped permission bypass is forwarded to the child.",
+      "negativeCase": "Reject unknown top-level options, multiple path operands and conflicting theme flags.",
+      "targetStage": "S4",
+      "flags": [
+        "--",
+        "--resume",
+        "-r",
+        "--dark",
+        "--light",
+        "--dangerously-skip-permissions"
+      ]
+    },
+    {
+      "id": "CLI-VERSION",
+      "invocation": "vesicle --version | -v",
+      "source": "src/cli/args.ts",
+      "sourceHash": "96422f775edb9c984f3f58479474bd5cc40a52777de1a6d8256587592ca58b29",
+      "behavior": "Print package version and exit without TUI/provider startup; v/h/r short options may be bundled, but version/help reject launch modifiers or operands.",
+      "negativeCase": "Reject version with project path or --resume.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-HELP",
+      "invocation": "vesicle --help | -h",
+      "source": "src/cli/args.ts",
+      "sourceHash": "96422f775edb9c984f3f58479474bd5cc40a52777de1a6d8256587592ca58b29",
+      "behavior": "Print top-level usage and exit without TUI/provider startup.",
+      "negativeCase": "Reject help with extra operands.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-LAUNCH",
+      "invocation": "vesicle launch [project-directory]",
+      "source": "src/cli/main.ts",
+      "sourceHash": "a3b21bcb578f650f6a5e35fd321b98cbefc3c51e14a1e45af14adc7d63154ac7",
+      "behavior": "Launch the resolved project directory (default .), forwarding process permission and theme flags.",
+      "negativeCase": "Refuse multiple directories or nonexistent/non-directory targets.",
+      "targetStage": "S4",
+      "flags": []
+    },
+    {
+      "id": "CLI-DEV",
+      "invocation": "vesicle dev",
+      "source": "src/cli/main.ts",
+      "sourceHash": "a3b21bcb578f650f6a5e35fd321b98cbefc3c51e14a1e45af14adc7d63154ac7",
+      "behavior": "Start the interactive TUI in cwd through the same runtime setup.",
+      "negativeCase": "Native runtime failure must surface; do not report bootstrap success.",
+      "targetStage": "S4",
+      "flags": []
+    },
+    {
+      "id": "CLI-SETUP",
+      "invocation": "vesicle setup",
+      "source": "src/cli/main.ts",
+      "sourceHash": "a3b21bcb578f650f6a5e35fd321b98cbefc3c51e14a1e45af14adc7d63154ac7",
+      "behavior": "Open guided configuration/project setup and optionally launch the selected project.",
+      "negativeCase": "Cancelled setup must not make an unintended provider request.",
+      "targetStage": "S4",
+      "flags": []
+    },
+    {
+      "id": "CLI-DOCTOR",
+      "invocation": "vesicle doctor",
+      "source": "src/cli/doctor.ts",
+      "sourceHash": "1d03544e02bede4be94ca2f1a0406fe82d6724afa643ce13499e856294abecdd",
+      "behavior": "Report runtime, assets, provider/config/credential-presence and MCP diagnostics without printing credential values.",
+      "negativeCase": "Missing config or unavailable service remains a diagnostic gap, not passed.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-ONCE",
+      "invocation": "vesicle once <prompt>",
+      "source": "src/cli/main.ts",
+      "sourceHash": "a3b21bcb578f650f6a5e35fd321b98cbefc3c51e14a1e45af14adc7d63154ac7",
+      "behavior": "Run one non-interactive prompt with actual tools and durable session; paused gate/question/engine/permission/quality outcomes print an actionable notice and session path.",
+      "negativeCase": "No prompt prints usage; --help after once is prompt text, not a side-effect-free help action.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-PROMPT-DUMP",
+      "invocation": "vesicle prompt dump --engine <id>",
+      "source": "src/cli/commands/prompt-dump.ts",
+      "sourceHash": "6c3f4104afce7470c3839462749c2484de06ee4730557f9523cb4462eac4f9ba",
+      "behavior": "Print composed prompt text. Includes the selected effective Harness and host-added tools.",
+      "negativeCase": "Unknown engine fails; help must not contact a provider.",
+      "targetStage": "S2",
+      "flags": [
+        "--engine",
+        "-e",
+        "--shape",
+        "-s",
+        "--help",
+        "-h"
+      ]
+    },
+    {
+      "id": "CLI-PROMPT-SHAPE",
+      "invocation": "vesicle prompt shape --engine <id>",
+      "source": "src/cli/commands/prompt-dump.ts",
+      "sourceHash": "6c3f4104afce7470c3839462749c2484de06ee4730557f9523cb4462eac4f9ba",
+      "behavior": "Print profile, prompt sizes and effective tool surface without prompt bodies. Includes the selected effective Harness and host-added tools.",
+      "negativeCase": "Unknown engine fails; help must not contact a provider.",
+      "targetStage": "S2",
+      "flags": [
+        "--engine",
+        "-e",
+        "--shape",
+        "-s",
+        "--help",
+        "-h"
+      ]
+    },
+    {
+      "id": "CLI-DEBUG-MARKDOWN-RUNTIME",
+      "invocation": "vesicle debug markdown-runtime",
+      "source": "src/cli/main.ts",
+      "sourceHash": "a3b21bcb578f650f6a5e35fd321b98cbefc3c51e14a1e45af14adc7d63154ac7",
+      "behavior": "Verify the Markdown worker, WASM and highlighting through the deployed runtime and report JSON success/failure.",
+      "negativeCase": "A broken packaged native/worker dependency must fail visibly.",
+      "targetStage": "S5",
+      "flags": []
+    },
+    {
+      "id": "CLI-DEBUG-TUI-BOOTSTRAP",
+      "invocation": "vesicle debug tui-bootstrap",
+      "source": "src/cli/main.ts",
+      "sourceHash": "a3b21bcb578f650f6a5e35fd321b98cbefc3c51e14a1e45af14adc7d63154ac7",
+      "behavior": "Initialize and dispose the actual TUI runtime without ordinary interactive generation.",
+      "negativeCase": "A broken packaged native/worker dependency must fail visibly.",
+      "targetStage": "S5",
+      "flags": []
+    },
+    {
+      "id": "CLI-ASSETS-STATUS",
+      "invocation": "vesicle assets status",
+      "source": "src/cli/assets.ts",
+      "sourceHash": "26bba942571c30666941c95edde5010f76a1c2d698f884be51d2fe788904456a",
+      "behavior": "Show selected baseline, effective layers and override identities without provider calls.",
+      "negativeCase": "Invalid paths, malformed packs or invalid arguments cannot silently activate partial assets.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-ASSETS-VERIFY",
+      "invocation": "vesicle assets verify <extracted-pack-directory>",
+      "source": "src/cli/assets.ts",
+      "sourceHash": "26bba942571c30666941c95edde5010f76a1c2d698f884be51d2fe788904456a",
+      "behavior": "Validate an extracted complete pack before installing or activating it.",
+      "negativeCase": "Invalid paths, malformed packs or invalid arguments cannot silently activate partial assets.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-ASSETS-INSTALL",
+      "invocation": "vesicle assets install <extracted-pack-directory>",
+      "source": "src/cli/assets.ts",
+      "sourceHash": "26bba942571c30666941c95edde5010f76a1c2d698f884be51d2fe788904456a",
+      "behavior": "Install a verified immutable pack into the managed store.",
+      "negativeCase": "Invalid paths, malformed packs or invalid arguments cannot silently activate partial assets.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-ASSETS-USE",
+      "invocation": "vesicle assets use <pack-id>@<version>",
+      "source": "src/cli/assets.ts",
+      "sourceHash": "26bba942571c30666941c95edde5010f76a1c2d698f884be51d2fe788904456a",
+      "behavior": "Select an already verified managed pack.",
+      "negativeCase": "Invalid paths, malformed packs or invalid arguments cannot silently activate partial assets.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-ASSETS-ROLLBACK",
+      "invocation": "vesicle assets rollback",
+      "source": "src/cli/assets.ts",
+      "sourceHash": "26bba942571c30666941c95edde5010f76a1c2d698f884be51d2fe788904456a",
+      "behavior": "Return explicit selection to the bundled baseline.",
+      "negativeCase": "Invalid paths, malformed packs or invalid arguments cannot silently activate partial assets.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-ASSETS-MATERIALIZE",
+      "invocation": "vesicle assets materialize <assets/path> [--global]",
+      "source": "src/cli/assets.ts",
+      "sourceHash": "26bba942571c30666941c95edde5010f76a1c2d698f884be51d2fe788904456a",
+      "behavior": "Copy a selected asset into project or global sparse overrides without changing the baseline.",
+      "negativeCase": "Invalid paths, malformed packs or invalid arguments cannot silently activate partial assets.",
+      "targetStage": "S2",
+      "flags": [
+        "--global"
+      ]
+    },
+    {
+      "id": "CLI-ASSETS-INIT",
+      "invocation": "vesicle assets init [--global]",
+      "source": "src/cli/assets.ts",
+      "sourceHash": "26bba942571c30666941c95edde5010f76a1c2d698f884be51d2fe788904456a",
+      "behavior": "Initialize editable project or global assets from the effective baseline.",
+      "negativeCase": "Invalid paths, malformed packs or invalid arguments cannot silently activate partial assets.",
+      "targetStage": "S2",
+      "flags": [
+        "--global"
+      ]
+    },
+    {
+      "id": "CLI-CONFIG-PATH",
+      "invocation": "vesicle config path",
+      "source": "src/cli/commands/config/index.ts",
+      "sourceHash": "6d2a56364365dc066da3f08e8d004d22c0512b4e4a80c197b836caf8d7d195d8",
+      "behavior": "Report resolved user configuration paths.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-CONFIG-SHOW",
+      "invocation": "vesicle config show <providers|env|permissions|mcp|quality|settings|preferences>",
+      "source": "src/cli/commands/config/show.ts",
+      "sourceHash": "649afab1a224f0c5a35adbff47bbe6c3d62a427bb1580c0b2b315a036f265319",
+      "behavior": "Print the selected configuration view; env sanitizes values as set/empty and redacts proxy credentials, including conservative handling of malformed lines.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-CONFIG-SET",
+      "invocation": "vesicle config set <file> <key> <value>",
+      "source": "src/cli/commands/config/set.ts",
+      "sourceHash": "e2d343ee53541e18be0f42bcf2d9ad2e3e2a96d9298e38e1f7a9f54d9f406215",
+      "behavior": "Atomically validate and set whitelisted permissions/preferences/quality/settings/providers keys; no generic arbitrary-file writer.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-CONFIG-UNSET",
+      "invocation": "vesicle config unset <settings|preferences> <key>",
+      "source": "src/cli/commands/config/unset.ts",
+      "sourceHash": "15c111d5b5477a10e0d18cf9160722217d04c5a85fb02f39d98191c5857845e9",
+      "behavior": "Remove supported settings or project preference keys and report whether a key existed.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-CONFIG-ADD-PROVIDER",
+      "invocation": "vesicle config add-provider --json '<entry>'",
+      "source": "src/cli/commands/config/add.ts",
+      "sourceHash": "bafe8fdeb07232408cae92bc4c26fdcbcebe64d09cb36481b56b9ff4ebf77aeb",
+      "behavior": "Validate and append a provider registry entry without storing a credential.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": [
+        "--json"
+      ]
+    },
+    {
+      "id": "CLI-CONFIG-ADD-MODEL",
+      "invocation": "vesicle config add-model <provider-id> --json '<entry>'",
+      "source": "src/cli/commands/config/add-model.ts",
+      "sourceHash": "1a3ebc78f511d9e3ef98081aed8dd9346f518e14c1e429290f449cc87a7245fe",
+      "behavior": "Validate and append a model to the selected provider.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": [
+        "--json"
+      ]
+    },
+    {
+      "id": "CLI-CONFIG-REMOVE-PROVIDER",
+      "invocation": "vesicle config remove-provider <provider-id>",
+      "source": "src/cli/commands/config/remove.ts",
+      "sourceHash": "904fc69bb4de40ac39bc531be45c221bc2c52180d9aefa4a7421edcd3397017b",
+      "behavior": "Remove a nondefault provider only after default selection and any retained Judge reference have been changed; never automatically retarget those references.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-CONFIG-REMOVE-MODEL",
+      "invocation": "vesicle config remove-model <provider-id> <model-id>",
+      "source": "src/cli/commands/config/remove.ts",
+      "sourceHash": "904fc69bb4de40ac39bc531be45c221bc2c52180d9aefa4a7421edcd3397017b",
+      "behavior": "Remove a model only if it is neither provider.defaultModel nor the registry default model; require the user to change defaults first.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-CONFIG-ADD-MCP",
+      "invocation": "vesicle config add-mcp --json '<entry>'",
+      "source": "src/cli/commands/config/add-mcp.ts",
+      "sourceHash": "b555da845e7bfc4566c0963daae4a9370857d1b80fc105d986b1efb32d40d3ee",
+      "behavior": "Validate and append an MCP server configuration; secrets use env references.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": [
+        "--json"
+      ]
+    },
+    {
+      "id": "CLI-CONFIG-REMOVE-MCP",
+      "invocation": "vesicle config remove-mcp <server-id>",
+      "source": "src/cli/commands/config/remove-mcp.ts",
+      "sourceHash": "c8e68b1c20a101c5fd90fdfdce6affab925560611d62a4423a36e76002ae52c4",
+      "behavior": "Remove the selected MCP server configuration.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-CONFIG-ENV-SET-EMPTY",
+      "invocation": "vesicle config env-set-empty <KEY>",
+      "source": "src/cli/commands/config/env.ts",
+      "sourceHash": "2073a0905e6b10ff0d1c217d2aee7b306d0bafcc6bbc69a061e6093f21f85628",
+      "behavior": "Create an empty secret placeholder without overwriting an existing non-empty value.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-CONFIG-ENV-SET-PROXY",
+      "invocation": "vesicle config env-set-proxy <URL>",
+      "source": "src/cli/commands/config/env.ts",
+      "sourceHash": "2073a0905e6b10ff0d1c217d2aee7b306d0bafcc6bbc69a061e6093f21f85628",
+      "behavior": "Validate and persist explicit proxy configuration; reject URL credentials.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-CONFIG-ENV-REMOVE",
+      "invocation": "vesicle config env-remove <KEY>",
+      "source": "src/cli/commands/config/env.ts",
+      "sourceHash": "2073a0905e6b10ff0d1c217d2aee7b306d0bafcc6bbc69a061e6093f21f85628",
+      "behavior": "Remove the selected env key without printing its old value.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-CONFIG-VALIDATE",
+      "invocation": "vesicle config validate",
+      "source": "src/cli/commands/config/index.ts",
+      "sourceHash": "6d2a56364365dc066da3f08e8d004d22c0512b4e4a80c197b836caf8d7d195d8",
+      "behavior": "Validate the configured files and print per-domain structured outcomes.",
+      "negativeCase": "Invalid entry/key/value or parse failure must not leave a partial configuration update.",
+      "targetStage": "S2",
+      "flags": []
+    },
+    {
+      "id": "CLI-SKILLS-LIST",
+      "invocation": "vesicle skills list ",
+      "source": "src/cli/commands/skills/inventory.ts",
+      "sourceHash": "5df06c3b459edd0413c3b0a914675a74214b42461221452410c93bb2cf841c2a",
+      "behavior": "List discovered Skill names, eligibility and diagnostics.",
+      "negativeCase": "Invalid structure, destination escape or failed validation must not publish an invalid Skill.",
+      "targetStage": "S3",
+      "flags": []
+    },
+    {
+      "id": "CLI-SKILLS-INSPECT",
+      "invocation": "vesicle skills inspect <name>",
+      "source": "src/cli/commands/skills/inventory.ts",
+      "sourceHash": "5df06c3b459edd0413c3b0a914675a74214b42461221452410c93bb2cf841c2a",
+      "behavior": "Show selected Skill metadata, resource summaries and diagnostics, or managed installation provenance; do not print instruction bodies.",
+      "negativeCase": "Invalid structure, destination escape or failed validation must not publish an invalid Skill.",
+      "targetStage": "S3",
+      "flags": []
+    },
+    {
+      "id": "CLI-SKILLS-VALIDATE",
+      "invocation": "vesicle skills validate <skill-directory> [--draft --json [--quiet-success]]",
+      "source": "src/cli/commands/skills/draft.ts",
+      "sourceHash": "91ae2e96226a75e60a235dc29b7bbcd5ac2ff9a0796a322df8467a324a2add5d",
+      "behavior": "Validate a Skill directory; draft mode returns the structured validation envelope, optionally quiet on success.",
+      "negativeCase": "Invalid structure, destination escape or failed validation must not publish an invalid Skill.",
+      "targetStage": "S3",
+      "flags": [
+        "--draft",
+        "--json",
+        "--quiet-success"
+      ]
+    },
+    {
+      "id": "CLI-SKILLS-PUBLISH-DRAFT",
+      "invocation": "vesicle skills publish-draft <draft-directory> --target project|installed --json",
+      "source": "src/cli/commands/skills/draft.ts",
+      "sourceHash": "91ae2e96226a75e60a235dc29b7bbcd5ac2ff9a0796a322df8467a324a2add5d",
+      "behavior": "Validate and publish a structured draft into the selected managed scope.",
+      "negativeCase": "Invalid structure, destination escape or failed validation must not publish an invalid Skill.",
+      "targetStage": "S3",
+      "flags": [
+        "--target",
+        "--json"
+      ]
+    },
+    {
+      "id": "CLI-SKILLS-CREATE",
+      "invocation": "vesicle skills create <name> [--scope user|project] [--force]",
+      "source": "src/cli/commands/skills/authoring.ts",
+      "sourceHash": "3a2ae793da01f1f5fc9d21ed94c3d406c73932a4dca2ddeb7e21e26776b2dd24",
+      "behavior": "Create a Skill skeleton in the selected scope; force explicitly permits replacement.",
+      "negativeCase": "Invalid structure, destination escape or failed validation must not publish an invalid Skill.",
+      "targetStage": "S3",
+      "flags": [
+        "--scope",
+        "--force"
+      ]
+    },
+    {
+      "id": "CLI-SKILLS-ENABLE",
+      "invocation": "vesicle skills enable <name>",
+      "source": "src/cli/commands/skills/authoring.ts",
+      "sourceHash": "3a2ae793da01f1f5fc9d21ed94c3d406c73932a4dca2ddeb7e21e26776b2dd24",
+      "behavior": "Enable the discovered project/user Skill or managed installation; use its owning disabled-list scope.",
+      "negativeCase": "Invalid structure, destination escape or failed validation must not publish an invalid Skill.",
+      "targetStage": "S3",
+      "flags": []
+    },
+    {
+      "id": "CLI-SKILLS-DISABLE",
+      "invocation": "vesicle skills disable <name>",
+      "source": "src/cli/commands/skills/authoring.ts",
+      "sourceHash": "3a2ae793da01f1f5fc9d21ed94c3d406c73932a4dca2ddeb7e21e26776b2dd24",
+      "behavior": "Disable the discovered project/user Skill or managed installation; verified Harness Skills cannot be disabled.",
+      "negativeCase": "Invalid structure, destination escape or failed validation must not publish an invalid Skill.",
+      "targetStage": "S3",
+      "flags": []
+    },
+    {
+      "id": "CLI-SKILLS-COPY-TEMPLATE",
+      "invocation": "vesicle skills copy-template <skill-name> <resource-path> <dest-path>",
+      "source": "src/cli/commands/skills/authoring.ts",
+      "sourceHash": "3a2ae793da01f1f5fc9d21ed94c3d406c73932a4dca2ddeb7e21e26776b2dd24",
+      "behavior": "Copy an allowed Skill template resource into a guarded project destination.",
+      "negativeCase": "Invalid structure, destination escape or failed validation must not publish an invalid Skill.",
+      "targetStage": "S3",
+      "flags": []
+    },
+    {
+      "id": "CLI-SKILLS-INSTALL",
+      "invocation": "vesicle skills install <path-or-url> [--ref <ref>] [--path <root>] [--all] [--include-worktree]",
+      "source": "src/cli/commands/skills/lifecycle.ts",
+      "sourceHash": "ecdc704a0e20eb54c3ce602073b39650ac9f7d85882699717fe3db5221bdd681",
+      "behavior": "Install from local directory or supported GitHub URL using explicit repository/ref/subpath selection; worktree inclusion is opt-in.",
+      "negativeCase": "Invalid structure, destination escape or failed validation must not publish an invalid Skill.",
+      "targetStage": "S3",
+      "flags": [
+        "--ref",
+        "--path",
+        "--all",
+        "--include-worktree"
+      ]
+    },
+    {
+      "id": "CLI-SKILLS-UPDATE",
+      "invocation": "vesicle skills update <name>",
+      "source": "src/cli/commands/skills/lifecycle.ts",
+      "sourceHash": "ecdc704a0e20eb54c3ce602073b39650ac9f7d85882699717fe3db5221bdd681",
+      "behavior": "Update a recorded installation from its provenance and preserve a rollback version.",
+      "negativeCase": "Invalid structure, destination escape or failed validation must not publish an invalid Skill.",
+      "targetStage": "S3",
+      "flags": []
+    },
+    {
+      "id": "CLI-SKILLS-ROLLBACK",
+      "invocation": "vesicle skills rollback <name>",
+      "source": "src/cli/commands/skills/lifecycle.ts",
+      "sourceHash": "ecdc704a0e20eb54c3ce602073b39650ac9f7d85882699717fe3db5221bdd681",
+      "behavior": "Restore the previous managed Skill version.",
+      "negativeCase": "Invalid structure, destination escape or failed validation must not publish an invalid Skill.",
+      "targetStage": "S3",
+      "flags": []
+    },
+    {
+      "id": "CLI-SKILLS-UNINSTALL",
+      "invocation": "vesicle skills uninstall <name>",
+      "source": "src/cli/commands/skills/lifecycle.ts",
+      "sourceHash": "ecdc704a0e20eb54c3ce602073b39650ac9f7d85882699717fe3db5221bdd681",
+      "behavior": "Remove the managed installation selected by name.",
+      "negativeCase": "Invalid structure, destination escape or failed validation must not publish an invalid Skill.",
+      "targetStage": "S3",
+      "flags": []
+    },
+    {
+      "id": "CLI-QUALITY-BENCHMARK",
+      "invocation": "vesicle quality benchmark --plan <path> --corpus <path> --output <jsonl> --report <json> --allow-live",
+      "source": "src/cli/commands/quality-benchmark.ts",
+      "sourceHash": "613573c675cd64b7ae3fa244dfb88c3ad4518b892863b74f449bd7971d5646b3",
+      "behavior": "Run the bounded experimental Judge benchmark plan against corpus hashes; append evaluations and atomically write the report. Current protocol conversion admits Chat Completions, Anthropic and Gemini, not Responses.",
+      "negativeCase": "Without --allow-live refuse provider calls; reject corpus hash mismatch, invalid pricing or colliding corpus/output/report paths.",
+      "targetStage": "S3",
+      "flags": [
+        "--plan",
+        "--corpus",
+        "--output",
+        "--report",
+        "--allow-live"
+      ]
+    }
+  ],
+  "parserNotes": [
+    "Global process flags are stripped only before each command terminator; later argv is owned by the command.",
+    "Only launch/setup/dev accept theme flags; resume is only a top-level launch modifier.",
+    "There is no universal subcommand --help guarantee. Never invoke an unknown help form with real credentials during inventory.",
+    "External tar/git arguments in skills/source/archive.ts and local.ts are subprocess implementation details, not Vesicle CLI flags.",
+    "The quality benchmark parser currently accepts additional value flags it does not consume. This permissiveness is a known limitation, not a promised new option."
+  ]
+}

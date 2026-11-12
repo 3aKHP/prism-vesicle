@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 1,
+  "variables": [
+    {
+      "name": "VESICLE_PROVIDERS_FILE",
+      "source": "src/config/providers.ts",
+      "behavior": "Override provider registry path; its directory also anchors sibling user state.",
+      "default": "user config directory/providers.yaml",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_CONFIG_DIR",
+      "source": "src/config/paths.ts",
+      "behavior": "Override user configuration directory when explicit providers path is absent.",
+      "default": "APPDATA > XDG_CONFIG_HOME > home fallback",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_MCP_FILE",
+      "source": "src/mcp/config.ts",
+      "behavior": "Override only this domain configuration file.",
+      "default": "resolved user configuration directory",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_PERMISSIONS_FILE",
+      "source": "src/config/permissions.ts",
+      "behavior": "Override only this domain configuration file.",
+      "default": "resolved user configuration directory",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_QUALITY_FILE",
+      "source": "src/config/quality.ts",
+      "behavior": "Override only this domain configuration file.",
+      "default": "resolved user configuration directory",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_HOST_CONFIG_DIR",
+      "source": "src/config/paths.ts",
+      "behavior": "Host-injected resolved directory for filtered Skill children; below explicit provider/config overrides.",
+      "default": "absent",
+      "scope": "host-injected"
+    },
+    {
+      "name": "VESICLE_SELF_EXECUTABLE",
+      "source": "src/core/runtime/self-invocation.ts",
+      "behavior": "Allow first-party Skill wrappers to invoke the exact running runtime; standalone omits entrypoint.",
+      "default": "host-resolved",
+      "scope": "host-injected"
+    },
+    {
+      "name": "VESICLE_SELF_ENTRYPOINT",
+      "source": "src/core/runtime/self-invocation.ts",
+      "behavior": "Allow first-party Skill wrappers to invoke the exact running runtime; standalone omits entrypoint.",
+      "default": "host-resolved",
+      "scope": "host-injected"
+    },
+    {
+      "name": "VESICLE_HOST_ASSETS_DIR",
+      "source": "src/core/skills/catalog-sources.ts",
+      "behavior": "Override package-owned host-assets directory after an explicit resolver option and before bundled host resolution; no activation trust bypass is implied.",
+      "default": "packaged host asset resolution",
+      "scope": "host-assets override"
+    },
+    {
+      "name": "VESICLE_PROVIDER_PROXY",
+      "source": "src/providers/shared/proxy.ts",
+      "behavior": "Explicit provider HTTP/WS proxy; user-file before process; validated/redacted and not bypassed by NO_PROXY.",
+      "default": "inherited target-scheme proxy or direct",
+      "scope": "user-process"
+    },
+    {
+      "name": "http_proxy",
+      "source": "src/providers/shared/proxy.ts",
+      "behavior": "Inherited target-scheme policy; lowercase proxy before uppercase, NO_PROXY before no_proxy. ALL_PROXY not supported.",
+      "default": "direct",
+      "scope": "user-process"
+    },
+    {
+      "name": "https_proxy",
+      "source": "src/providers/shared/proxy.ts",
+      "behavior": "Inherited target-scheme policy; lowercase proxy before uppercase, NO_PROXY before no_proxy. ALL_PROXY not supported.",
+      "default": "direct",
+      "scope": "user-process"
+    },
+    {
+      "name": "HTTP_PROXY",
+      "source": "src/providers/shared/proxy.ts",
+      "behavior": "Inherited target-scheme policy; lowercase proxy before uppercase, NO_PROXY before no_proxy. ALL_PROXY not supported.",
+      "default": "direct",
+      "scope": "user-process"
+    },
+    {
+      "name": "HTTPS_PROXY",
+      "source": "src/providers/shared/proxy.ts",
+      "behavior": "Inherited target-scheme policy; lowercase proxy before uppercase, NO_PROXY before no_proxy. ALL_PROXY not supported.",
+      "default": "direct",
+      "scope": "user-process"
+    },
+    {
+      "name": "NO_PROXY",
+      "source": "src/providers/shared/proxy.ts",
+      "behavior": "Inherited target-scheme policy; lowercase proxy before uppercase, NO_PROXY before no_proxy. ALL_PROXY not supported.",
+      "default": "no extra bypass list; inherited proxy selection still applies",
+      "scope": "user-process"
+    },
+    {
+      "name": "no_proxy",
+      "source": "src/providers/shared/proxy.ts",
+      "behavior": "Inherited target-scheme policy; lowercase proxy before uppercase, NO_PROXY before no_proxy. ALL_PROXY not supported.",
+      "default": "no extra bypass list; inherited proxy selection still applies",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_EDITOR",
+      "source": "src/tui/workspace/external-editor-runtime.ts",
+      "behavior": "Resolve external editor in order VESICLE_EDITOR > settings.editor > VISUAL > EDITOR > platform fallback; split argv without shell.",
+      "default": "vi on POSIX; notepad on Windows",
+      "scope": "user-process"
+    },
+    {
+      "name": "VISUAL",
+      "source": "src/tui/workspace/external-editor-runtime.ts",
+      "behavior": "Resolve external editor in order VESICLE_EDITOR > settings.editor > VISUAL > EDITOR > platform fallback; split argv without shell.",
+      "default": "vi on POSIX; notepad on Windows",
+      "scope": "user-process"
+    },
+    {
+      "name": "EDITOR",
+      "source": "src/tui/workspace/external-editor-runtime.ts",
+      "behavior": "Resolve external editor in order VESICLE_EDITOR > settings.editor > VISUAL > EDITOR > platform fallback; split argv without shell.",
+      "default": "vi on POSIX; notepad on Windows",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_THEME",
+      "source": "src/tui/theme.ts",
+      "behavior": "dark/light/default/auto theme preference; invalid value reports a diagnostic; session, launch and project values take precedence.",
+      "default": "default (terminal mode, initially dark)",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_REDUCED_MOTION",
+      "source": "src/tui/app.tsx",
+      "behavior": "Value 1 freezes splash and title working pulse.",
+      "default": "animation enabled",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_TERMINAL_TITLE",
+      "source": "src/tui/terminal-title.ts",
+      "behavior": "auto/on/off terminal-title projection; invalid values fail closed.",
+      "default": "auto: real TTY only",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_DISABLE_TERMINAL_TITLE",
+      "source": "src/tui/terminal-title.ts",
+      "behavior": "Value 1 is a hard no-write boundary including shutdown.",
+      "default": "no hard disable",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_DISABLE_FILE_CHECKPOINTING",
+      "source": "src/core/checkpoints/file-history.ts",
+      "behavior": "Value 1 disables file checkpoint capture; missing fork anchor degrades candidate restore honestly.",
+      "default": "checkpointing enabled",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_MARKDOWN_RENDERER",
+      "source": "src/tui/widgets/MarkdownContent.tsx",
+      "behavior": "markdown or plain; text aliases plain; unknown values fall back to markdown.",
+      "default": "markdown",
+      "scope": "user-process"
+    },
+    {
+      "name": "VESICLE_DEBUG_LOG",
+      "source": "src/tui/debug-log.ts",
+      "behavior": "1/true/yes enable local TUI diagnostics under .vesicle/logs/tui-debug.log; logs can contain local paths.",
+      "default": "disabled",
+      "scope": "user-process"
+    },
+    {
+      "name": "OTUI_TREE_SITTER_WORKER_PATH",
+      "source": "src/tui/tree-sitter-runtime.ts",
+      "behavior": "TS runtime worker-path override; replacement runtime must retain meaningful debug/diagnostic behavior, not Bun worker implementation.",
+      "default": "packaged worker",
+      "scope": "TS-runtime-specific"
+    },
+    {
+      "name": "OPENTUI_LIBC",
+      "source": "src/tui/markdown-runtime-diagnostic.ts",
+      "behavior": "TS native dependency loader selects musl only for musl; retained platform coverage is in platforms.json.",
+      "default": "glibc",
+      "scope": "TS-runtime-specific"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "source": "src/cli/commands/skills/source/github.ts",
+      "behavior": "Authenticate supported Skill repository access; never persist token in provenance.",
+      "default": "anonymous public repository access",
+      "scope": "user-process"
+    },
+    {
+      "name": "TAVILY_API_KEY",
+      "source": "src/core/tools/web/tavily-client.ts",
+      "behavior": "Authenticate Tavily tools using sibling user .env before process fallback; absent credentials hide host web tools from the effective model surface and explicit calls fail as unconfigured.",
+      "default": "unconfigured",
+      "scope": "user-file or process secret"
+    }
+  ],
+  "boundaries": [
+    "Provider apiKeyEnv names and MCP header placeholders are open-ended configured secret names, not fixed catalogue variables.",
+    "OS PATH/home/COMSPEC/terminal/WSL variables support platform discovery; they do not widen model tool authority.",
+    "Host-injected variables are process interfaces; runtime-specific TS mechanics are not a requirement to retain Bun in the Rust product."
+  ]
+}

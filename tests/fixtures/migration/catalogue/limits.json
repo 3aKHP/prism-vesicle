@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "id": "LIMIT-MCP-DEFERRED",
+      "classification": "not-implemented",
+      "behavior": "Local stdio, classic HTTP+SSE, prompts/resources APIs, OAuth, roots, sampling, elicitation, logging control, subscriptions/tasks and automatic resource/audio/URL promotion.",
+      "anchor": "src/mcp/README.md"
+    },
+    {
+      "id": "LIMIT-MCP-MRTR",
+      "classification": "implemented-rejection",
+      "behavior": "Modern input_required is rejected, never reported as a successful tool result; the host starts no MRTR input flow or retry of that rejected result. The normalization fallback uses isError plus invalid-response; SDK rejection may surface UnsupportedResultType.",
+      "anchor": "src/mcp/README.md"
+    },
+    {
+      "id": "LIMIT-QUALITY-CALIBRATED",
+      "classification": "not-connected",
+      "behavior": "Calibrated semantic-rewrite policy has pure eligibility evaluation only; not connected to production rewriting. Experimental opt-in Judge is a separate implemented capability.",
+      "anchor": "docs/dev/QUALITY_GUARD.md"
+    },
+    {
+      "id": "LIMIT-HARNESS-ONLINE",
+      "classification": "not-implemented",
+      "behavior": "Pack extraction, online release/channel discovery/downloads and automatic Harness update; offline already-extracted pack installation is implemented.",
+      "anchor": "STATUS.md"
+    },
+    {
+      "id": "LIMIT-MODEL-DISCOVERY",
+      "classification": "implemented-limit",
+      "behavior": "Discovery consumes OpenAI-compatible models response shape; Anthropic/Gemini require exact manual model IDs and do not infer capabilities from names.",
+      "anchor": "STATUS.md"
+    },
+    {
+      "id": "LIMIT-GENERIC-SSE-REPLAY",
+      "classification": "implemented-limit",
+      "behavior": "Generic adapters do not implicitly replay a partly consumed SSE stream. Responses owns its separately bounded attempt-reset/commit protocol.",
+      "anchor": "docs/dev/PROVIDERS.md"
+    },
+    {
+      "id": "LIMIT-FS-RECURSION",
+      "classification": "implemented-limit",
+      "behavior": "No recursive delete or recursive directory copy model tool; move_directory refuses an existing destination.",
+      "anchor": "STATUS.md"
+    },
+    {
+      "id": "LIMIT-REWIND-SCOPE",
+      "classification": "implemented-limit",
+      "behavior": "Only guarded tracked mutations are rewind-safe; scratch, instruction configuration and arbitrary host processes are excluded.",
+      "anchor": "docs/dev/SESSIONS.md"
+    },
+    {
+      "id": "LIMIT-CANDIDATE-LEGACY",
+      "classification": "implemented-degradation",
+      "behavior": "Legacy candidate bundles without v2 full-manifest authority, missing anchors and unsupported file kinds remain explicit degradation/untracked outcomes. No candidate garbage collection.",
+      "anchor": "docs/dev/SESSIONS.md"
+    },
+    {
+      "id": "LIMIT-SUBAGENT-SKILLS",
+      "classification": "not-implemented",
+      "behavior": "Automatic inherited parent Skill activation for child Agents remains deferred.",
+      "anchor": "docs/dev/SKILLS.md"
+    },
+    {
+      "id": "LIMIT-SKILL-MARKETPLACE",
+      "classification": "not-implemented",
+      "behavior": "Optional registry/marketplace beyond supported local/Git repository installation remains deferred.",
+      "anchor": "docs/dev/SKILLS.md"
+    },
+    {
+      "id": "LIMIT-INSTRUCTION-RESTORE",
+      "classification": "not-implemented",
+      "behavior": "Dedicated automatic restore command and per-turn instruction-change audit records remain deferred; current .previous and init backups permit manual recovery.",
+      "anchor": "STATUS.md"
+    },
+    {
+      "id": "LIMIT-PROMPT-CACHE",
+      "classification": "not-implemented",
+      "behavior": "PrefixShape hashing and CacheDiagnostics engineering remain deferred; provider usage cache reporting is implemented.",
+      "anchor": "STATUS.md"
+    },
+    {
+      "id": "LIMIT-PLATFORM-EVIDENCE",
+      "classification": "evidence-gap",
+      "behavior": "Eight npm native variants are declared; current S0 CI proves Linux x64 and Windows x64 only. Other variants remain in the denominator pending native consumers.",
+      "anchor": "tests/fixtures/migration/catalogue/platforms.json"
+    },
+    {
+      "id": "LIMIT-I18N",
+      "classification": "proposed-addition",
+      "behavior": "Runtime en/zh-CN localization is an explicit proposed addition, not an existing TS capability.",
+      "anchor": "tests/fixtures/migration/catalogue/additions.json"
+    }
+  ],
+  "rule": "An implemented limitation or failure behavior is preserved as an observable contract; not-implemented/deferred items are excluded only from the existing TS capability denominator, not silently removed from an accepted future addition."
+}

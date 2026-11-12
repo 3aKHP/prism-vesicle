@@ -426,8 +426,8 @@ async function safeClose(client: Client): Promise<void> {
 
 /**
  * Normalize a tools/call result, rejecting modern `input_required` (MRTR)
- * with a stable unsupported-capability error — no retry, no side effect,
- * never reported as success.
+ * as an invalid tool result. This fallback never starts an MRTR input flow
+ * or reports success; the SDK may reject the result before it reaches here.
  */
 function normalizeToolCallResult(raw: unknown): McpToolCallResult {
   if (isRecord(raw) && raw.resultType === "input_required") {

@@ -1,0 +1,600 @@
+{
+  "schemaVersion": 1,
+  "sourceBaseline": "2bc4f9075214f72d7f930dd0dba173f1768afc2c",
+  "matrix": [
+    {
+      "id": "PROVIDER-openai-chat-compatible-http",
+      "protocol": "openai-chat-compatible",
+      "responsesProfile": null,
+      "transport": "http",
+      "requestModes": [
+        "non-stream JSON",
+        "typed stream"
+      ],
+      "source": "src/providers/openai-chat",
+      "anchors": [
+        "docs/dev/PROVIDERS.md"
+      ],
+      "modalities": [
+        {
+          "kind": "text",
+          "admission": "configured model",
+          "expectation": "Normalize text, completion and usage; no partial attempt commit on failure."
+        },
+        {
+          "kind": "function-tool",
+          "admission": "declared effective tool surface and compatible model",
+          "expectation": "Exact function schema and IDs; tool outputs paired before continuation, including failed tool results."
+        },
+        {
+          "kind": "image",
+          "admission": "model capabilities.vision === true; image materialized from validated attachment references",
+          "expectation": "Protocol image encoding preserves MIME/body; a request carrying images without vision admission is rejected rather than silently stripping images. Adapter encoding support is not evidence a specific remote model accepts images."
+        }
+      ],
+      "nativeWebSearch": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "Reject/omit search declaration and do not admit unsupported semantic search items/events."
+      },
+      "remoteCompact": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "No remote Responses compaction; portable summary remains available."
+      },
+      "replay": "reasoning_content and exact tool-call IDs/results remain paired on the next request; stream finish/usage and no-stream responses normalize to the same host shape.",
+      "targetStage": "S3",
+      "evidenceRequirement": "Deterministic request/event/projection assertions plus bounded real endpoint lane; official OpenAI claims require the official endpoint. Missing selectors or credentials are unavailable, never passed.",
+      "currentStageEvidence": "not executed against live service in S0",
+      "maxTokensWhenAbsent": "field omitted"
+    },
+    {
+      "id": "PROVIDER-anthropic-messages-http",
+      "protocol": "anthropic-messages",
+      "responsesProfile": null,
+      "transport": "http",
+      "requestModes": [
+        "non-stream JSON",
+        "typed stream"
+      ],
+      "source": "src/providers/anthropic-messages",
+      "anchors": [
+        "docs/dev/PROVIDERS.md"
+      ],
+      "modalities": [
+        {
+          "kind": "text",
+          "admission": "configured model",
+          "expectation": "Normalize text, completion and usage; no partial attempt commit on failure."
+        },
+        {
+          "kind": "function-tool",
+          "admission": "declared effective tool surface and compatible model",
+          "expectation": "Exact function schema and IDs; tool outputs paired before continuation, including failed tool results."
+        },
+        {
+          "kind": "image",
+          "admission": "model capabilities.vision === true; image materialized from validated attachment references",
+          "expectation": "Protocol image encoding preserves MIME/body; a request carrying images without vision admission is rejected rather than silently stripping images. Adapter encoding support is not evidence a specific remote model accepts images."
+        }
+      ],
+      "nativeWebSearch": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "Reject/omit search declaration and do not admit unsupported semantic search items/events."
+      },
+      "remoteCompact": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "No remote Responses compaction; portable summary remains available."
+      },
+      "replay": "Thinking/signature blocks precede text/tool_use; streamed blocks remain indexed; tool_result uses user content and preserves is_error.",
+      "targetStage": "S3",
+      "evidenceRequirement": "Deterministic request/event/projection assertions plus bounded real endpoint lane; official OpenAI claims require the official endpoint. Missing selectors or credentials are unavailable, never passed.",
+      "currentStageEvidence": "not executed against live service in S0",
+      "maxTokensWhenAbsent": 4096
+    },
+    {
+      "id": "PROVIDER-gemini-generate-content-http",
+      "protocol": "gemini-generate-content",
+      "responsesProfile": null,
+      "transport": "http",
+      "requestModes": [
+        "non-stream JSON",
+        "typed stream"
+      ],
+      "source": "src/providers/gemini-generate-content",
+      "anchors": [
+        "docs/dev/PROVIDERS.md"
+      ],
+      "modalities": [
+        {
+          "kind": "text",
+          "admission": "configured model",
+          "expectation": "Normalize text, completion and usage; no partial attempt commit on failure."
+        },
+        {
+          "kind": "function-tool",
+          "admission": "declared effective tool surface and compatible model",
+          "expectation": "Exact function schema and IDs; tool outputs paired before continuation, including failed tool results."
+        },
+        {
+          "kind": "image",
+          "admission": "model capabilities.vision === true; image materialized from validated attachment references",
+          "expectation": "Protocol image encoding preserves MIME/body; a request carrying images without vision admission is rejected rather than silently stripping images. Adapter encoding support is not evidence a specific remote model accepts images."
+        }
+      ],
+      "nativeWebSearch": {
+        "admitted": true,
+        "conditions": [
+          "capabilities.builtinWebSearch true",
+          "session toggle or webSearchDefault true",
+          "Engine surface includes web_search"
+        ],
+        "expectation": "Declare provider-native search, retain normalized audit report and apply protocol-specific replay rules."
+      },
+      "remoteCompact": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "No remote Responses compaction; portable summary remains available."
+      },
+      "replay": "Preserve thought/signature native parts; functionResponse-only user batch stays separate from ordinary multimodal user content; empty unsigned parts are omitted.",
+      "targetStage": "S3",
+      "evidenceRequirement": "Deterministic request/event/projection assertions plus bounded real endpoint lane; official OpenAI claims require the official endpoint. Missing selectors or credentials are unavailable, never passed.",
+      "currentStageEvidence": "not executed against live service in S0",
+      "maxTokensWhenAbsent": 4096
+    },
+    {
+      "id": "PROVIDER-openai-public-http",
+      "protocol": "openai-responses",
+      "responsesProfile": "openai-public",
+      "transport": "http",
+      "requestModes": [
+        "non-stream JSON",
+        "typed stream"
+      ],
+      "source": "src/providers/openai-responses",
+      "anchors": [
+        "docs/dev/PROVIDERS.md",
+        "docs/dev/OPENAI_RESPONSES_CONFORMANCE.md"
+      ],
+      "modalities": [
+        {
+          "kind": "text",
+          "admission": "configured model",
+          "expectation": "Normalize text, completion and usage; no partial attempt commit on failure."
+        },
+        {
+          "kind": "function-tool",
+          "admission": "declared effective tool surface and compatible model",
+          "expectation": "Exact function schema and IDs; tool outputs paired before continuation, including failed tool results."
+        },
+        {
+          "kind": "image",
+          "admission": "model capabilities.vision === true; image materialized from validated attachment references",
+          "expectation": "Protocol image encoding preserves MIME/body; a request carrying images without vision admission is rejected rather than silently stripping images. Adapter encoding support is not evidence a specific remote model accepts images."
+        }
+      ],
+      "nativeWebSearch": {
+        "admitted": true,
+        "conditions": [
+          "capabilities.builtinWebSearch true",
+          "session toggle or webSearchDefault true",
+          "Engine surface includes web_search"
+        ],
+        "expectation": "Declare provider-native search, retain normalized audit report and apply protocol-specific replay rules."
+      },
+      "remoteCompact": {
+        "admitted": true,
+        "conditions": [
+          "capabilities.remoteCompact true",
+          "profile admits remote compaction"
+        ],
+        "expectation": "Standalone HTTPS compact; only 404 negotiates inline unary fallback; portable summary survives remote failure. Ordinary history can be compacted; exact-owner restriction applies when replaying native state, not to initiating compaction."
+      },
+      "replay": "Ordered native Items replay only under the exact protocol/provider/model/endpoint/profile owner; portable projection on owner change.",
+      "targetStage": "S3",
+      "evidenceRequirement": "Deterministic request/event/projection assertions plus bounded real endpoint lane; official OpenAI claims require the official endpoint. Missing selectors or credentials are unavailable, never passed.",
+      "currentStageEvidence": "not executed against live service in S0",
+      "maxTokensWhenAbsent": "field omitted"
+    },
+    {
+      "id": "PROVIDER-openai-public-websocket",
+      "protocol": "openai-responses",
+      "responsesProfile": "openai-public",
+      "transport": "websocket",
+      "requestModes": [
+        "session-owned WebSocket response.create; explicit HTTP fallback after exhaustion"
+      ],
+      "source": "src/providers/openai-responses",
+      "anchors": [
+        "docs/dev/PROVIDERS.md",
+        "docs/dev/OPENAI_RESPONSES_CONFORMANCE.md"
+      ],
+      "modalities": [
+        {
+          "kind": "text",
+          "admission": "configured model",
+          "expectation": "Normalize text, completion and usage; no partial attempt commit on failure."
+        },
+        {
+          "kind": "function-tool",
+          "admission": "declared effective tool surface and compatible model",
+          "expectation": "Exact function schema and IDs; tool outputs paired before continuation, including failed tool results."
+        },
+        {
+          "kind": "image",
+          "admission": "model capabilities.vision === true; image materialized from validated attachment references",
+          "expectation": "Protocol image encoding preserves MIME/body; a request carrying images without vision admission is rejected rather than silently stripping images. Adapter encoding support is not evidence a specific remote model accepts images."
+        }
+      ],
+      "nativeWebSearch": {
+        "admitted": true,
+        "conditions": [
+          "capabilities.builtinWebSearch true",
+          "session toggle or webSearchDefault true",
+          "Engine surface includes web_search"
+        ],
+        "expectation": "Declare provider-native search, retain normalized audit report and apply protocol-specific replay rules."
+      },
+      "remoteCompact": {
+        "admitted": true,
+        "conditions": [
+          "capabilities.remoteCompact true",
+          "profile admits remote compaction"
+        ],
+        "expectation": "Standalone HTTPS compact; only 404 negotiates inline unary fallback; portable summary survives remote failure. Ordinary history can be compacted; exact-owner restriction applies when replaying native state, not to initiating compaction."
+      },
+      "replay": "Ordered native Items replay only under the exact protocol/provider/model/endpoint/profile owner; portable projection on owner change.",
+      "targetStage": "S3",
+      "evidenceRequirement": "Deterministic request/event/projection assertions plus bounded real endpoint lane; official OpenAI claims require the official endpoint. Missing selectors or credentials are unavailable, never passed.",
+      "currentStageEvidence": "not executed against live service in S0",
+      "maxTokensWhenAbsent": "field omitted"
+    },
+    {
+      "id": "PROVIDER-codex-http-relay-http",
+      "protocol": "openai-responses",
+      "responsesProfile": "codex-http-relay",
+      "transport": "http",
+      "requestModes": [
+        "non-stream JSON",
+        "typed stream"
+      ],
+      "source": "src/providers/openai-responses",
+      "anchors": [
+        "docs/dev/PROVIDERS.md",
+        "docs/dev/OPENAI_RESPONSES_CONFORMANCE.md"
+      ],
+      "modalities": [
+        {
+          "kind": "text",
+          "admission": "configured model",
+          "expectation": "Normalize text, completion and usage; no partial attempt commit on failure."
+        },
+        {
+          "kind": "function-tool",
+          "admission": "declared effective tool surface and compatible model",
+          "expectation": "Exact function schema and IDs; tool outputs paired before continuation, including failed tool results."
+        },
+        {
+          "kind": "image",
+          "admission": "model capabilities.vision === true; image materialized from validated attachment references",
+          "expectation": "Protocol image encoding preserves MIME/body; a request carrying images without vision admission is rejected rather than silently stripping images. Adapter encoding support is not evidence a specific remote model accepts images."
+        }
+      ],
+      "nativeWebSearch": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "Reject/omit search declaration and do not admit unsupported semantic search items/events."
+      },
+      "remoteCompact": {
+        "admitted": true,
+        "conditions": [
+          "capabilities.remoteCompact true",
+          "profile admits remote compaction"
+        ],
+        "expectation": "Standalone HTTPS compact; only 404 negotiates inline unary fallback; portable summary survives remote failure. Ordinary history can be compacted; exact-owner restriction applies when replaying native state, not to initiating compaction."
+      },
+      "replay": "Ordered native Items replay only under the exact protocol/provider/model/endpoint/profile owner; portable projection on owner change.",
+      "targetStage": "S3",
+      "evidenceRequirement": "Deterministic request/event/projection assertions plus bounded real endpoint lane; official OpenAI claims require the official endpoint. Missing selectors or credentials are unavailable, never passed.",
+      "currentStageEvidence": "not executed against live service in S0",
+      "maxTokensWhenAbsent": "field omitted"
+    },
+    {
+      "id": "PROVIDER-codex-beta-2026-02-06-http",
+      "protocol": "openai-responses",
+      "responsesProfile": "codex-beta-2026-02-06",
+      "transport": "http",
+      "requestModes": [
+        "non-stream JSON",
+        "typed stream"
+      ],
+      "source": "src/providers/openai-responses",
+      "anchors": [
+        "docs/dev/PROVIDERS.md",
+        "docs/dev/OPENAI_RESPONSES_CONFORMANCE.md"
+      ],
+      "modalities": [
+        {
+          "kind": "text",
+          "admission": "configured model",
+          "expectation": "Normalize text, completion and usage; no partial attempt commit on failure."
+        },
+        {
+          "kind": "function-tool",
+          "admission": "declared effective tool surface and compatible model",
+          "expectation": "Exact function schema and IDs; tool outputs paired before continuation, including failed tool results."
+        },
+        {
+          "kind": "image",
+          "admission": "model capabilities.vision === true; image materialized from validated attachment references",
+          "expectation": "Protocol image encoding preserves MIME/body; a request carrying images without vision admission is rejected rather than silently stripping images. Adapter encoding support is not evidence a specific remote model accepts images."
+        }
+      ],
+      "nativeWebSearch": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "Reject/omit search declaration and do not admit unsupported semantic search items/events."
+      },
+      "remoteCompact": {
+        "admitted": true,
+        "conditions": [
+          "capabilities.remoteCompact true",
+          "profile admits remote compaction"
+        ],
+        "expectation": "Standalone HTTPS compact; only 404 negotiates inline unary fallback; portable summary survives remote failure. Ordinary history can be compacted; exact-owner restriction applies when replaying native state, not to initiating compaction."
+      },
+      "replay": "Ordered native Items replay only under the exact protocol/provider/model/endpoint/profile owner; portable projection on owner change.",
+      "targetStage": "S3",
+      "evidenceRequirement": "Deterministic request/event/projection assertions plus bounded real endpoint lane; official OpenAI claims require the official endpoint. Missing selectors or credentials are unavailable, never passed.",
+      "currentStageEvidence": "not executed against live service in S0",
+      "maxTokensWhenAbsent": "field omitted"
+    },
+    {
+      "id": "PROVIDER-codex-beta-2026-02-06-websocket",
+      "protocol": "openai-responses",
+      "responsesProfile": "codex-beta-2026-02-06",
+      "transport": "websocket",
+      "requestModes": [
+        "session-owned WebSocket response.create; explicit HTTP fallback after exhaustion"
+      ],
+      "source": "src/providers/openai-responses",
+      "anchors": [
+        "docs/dev/PROVIDERS.md",
+        "docs/dev/OPENAI_RESPONSES_CONFORMANCE.md"
+      ],
+      "modalities": [
+        {
+          "kind": "text",
+          "admission": "configured model",
+          "expectation": "Normalize text, completion and usage; no partial attempt commit on failure."
+        },
+        {
+          "kind": "function-tool",
+          "admission": "declared effective tool surface and compatible model",
+          "expectation": "Exact function schema and IDs; tool outputs paired before continuation, including failed tool results."
+        },
+        {
+          "kind": "image",
+          "admission": "model capabilities.vision === true; image materialized from validated attachment references",
+          "expectation": "Protocol image encoding preserves MIME/body; a request carrying images without vision admission is rejected rather than silently stripping images. Adapter encoding support is not evidence a specific remote model accepts images."
+        }
+      ],
+      "nativeWebSearch": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "Reject/omit search declaration and do not admit unsupported semantic search items/events."
+      },
+      "remoteCompact": {
+        "admitted": true,
+        "conditions": [
+          "capabilities.remoteCompact true",
+          "profile admits remote compaction"
+        ],
+        "expectation": "Standalone HTTPS compact; only 404 negotiates inline unary fallback; portable summary survives remote failure. Ordinary history can be compacted; exact-owner restriction applies when replaying native state, not to initiating compaction."
+      },
+      "replay": "Ordered native Items replay only under the exact protocol/provider/model/endpoint/profile owner; portable projection on owner change.",
+      "targetStage": "S3",
+      "evidenceRequirement": "Deterministic request/event/projection assertions plus bounded real endpoint lane; official OpenAI claims require the official endpoint. Missing selectors or credentials are unavailable, never passed.",
+      "currentStageEvidence": "not executed against live service in S0",
+      "maxTokensWhenAbsent": "field omitted"
+    },
+    {
+      "id": "PROVIDER-mimo-subset-2026-07-30-http",
+      "protocol": "openai-responses",
+      "responsesProfile": "mimo-subset-2026-07-30",
+      "transport": "http",
+      "requestModes": [
+        "non-stream JSON",
+        "typed stream"
+      ],
+      "source": "src/providers/openai-responses",
+      "anchors": [
+        "docs/dev/PROVIDERS.md",
+        "docs/dev/OPENAI_RESPONSES_CONFORMANCE.md"
+      ],
+      "modalities": [
+        {
+          "kind": "text",
+          "admission": "configured model",
+          "expectation": "Normalize text, completion and usage; no partial attempt commit on failure."
+        },
+        {
+          "kind": "function-tool",
+          "admission": "declared effective tool surface and compatible model",
+          "expectation": "Exact function schema and IDs; tool outputs paired before continuation, including failed tool results."
+        },
+        {
+          "kind": "image",
+          "admission": "model capabilities.vision === true; image materialized from validated attachment references",
+          "expectation": "Protocol image encoding preserves MIME/body; a request carrying images without vision admission is rejected rather than silently stripping images. Adapter encoding support is not evidence a specific remote model accepts images."
+        }
+      ],
+      "nativeWebSearch": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "Reject/omit search declaration and do not admit unsupported semantic search items/events."
+      },
+      "remoteCompact": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "No remote Responses compaction; portable summary remains available."
+      },
+      "replay": "Full context and plaintext reasoning_text Items, without unsupported storage/continuation/encrypted-include fields.",
+      "targetStage": "S3",
+      "evidenceRequirement": "Deterministic request/event/projection assertions plus bounded real endpoint lane; official OpenAI claims require the official endpoint. Missing selectors or credentials are unavailable, never passed.",
+      "currentStageEvidence": "not executed against live service in S0",
+      "maxTokensWhenAbsent": "field omitted"
+    },
+    {
+      "id": "PROVIDER-deepseek-subset-2026-07-31-http",
+      "protocol": "openai-responses",
+      "responsesProfile": "deepseek-subset-2026-07-31",
+      "transport": "http",
+      "requestModes": [
+        "non-stream JSON",
+        "typed stream"
+      ],
+      "source": "src/providers/openai-responses",
+      "anchors": [
+        "docs/dev/PROVIDERS.md",
+        "docs/dev/OPENAI_RESPONSES_CONFORMANCE.md"
+      ],
+      "modalities": [
+        {
+          "kind": "text",
+          "admission": "configured model",
+          "expectation": "Normalize text, completion and usage; no partial attempt commit on failure."
+        },
+        {
+          "kind": "function-tool",
+          "admission": "declared effective tool surface and compatible model",
+          "expectation": "Exact function schema and IDs; tool outputs paired before continuation, including failed tool results."
+        },
+        {
+          "kind": "image",
+          "admission": "model capabilities.vision === true; image materialized from validated attachment references",
+          "expectation": "Protocol image encoding preserves MIME/body; a request carrying images without vision admission is rejected rather than silently stripping images. Adapter encoding support is not evidence a specific remote model accepts images."
+        }
+      ],
+      "nativeWebSearch": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "Reject/omit search declaration and do not admit unsupported semantic search items/events."
+      },
+      "remoteCompact": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "No remote Responses compaction; portable summary remains available."
+      },
+      "replay": "Full context and plaintext reasoning_text Items, without unsupported storage/continuation/encrypted-include fields.",
+      "targetStage": "S3",
+      "evidenceRequirement": "Deterministic request/event/projection assertions plus bounded real endpoint lane; official OpenAI claims require the official endpoint. Missing selectors or credentials are unavailable, never passed.",
+      "currentStageEvidence": "not executed against live service in S0",
+      "maxTokensWhenAbsent": "field omitted"
+    },
+    {
+      "id": "PROVIDER-deepseek-subset-2026-08-19-http",
+      "protocol": "openai-responses",
+      "responsesProfile": "deepseek-subset-2026-08-19",
+      "transport": "http",
+      "requestModes": [
+        "non-stream JSON",
+        "typed stream"
+      ],
+      "source": "src/providers/openai-responses",
+      "anchors": [
+        "docs/dev/PROVIDERS.md",
+        "docs/dev/OPENAI_RESPONSES_CONFORMANCE.md"
+      ],
+      "modalities": [
+        {
+          "kind": "text",
+          "admission": "configured model",
+          "expectation": "Normalize text, completion and usage; no partial attempt commit on failure."
+        },
+        {
+          "kind": "function-tool",
+          "admission": "declared effective tool surface and compatible model",
+          "expectation": "Exact function schema and IDs; tool outputs paired before continuation, including failed tool results."
+        },
+        {
+          "kind": "image",
+          "admission": "model capabilities.vision === true; image materialized from validated attachment references",
+          "expectation": "Protocol image encoding preserves MIME/body; a request carrying images without vision admission is rejected rather than silently stripping images. Adapter encoding support is not evidence a specific remote model accepts images."
+        }
+      ],
+      "nativeWebSearch": {
+        "admitted": true,
+        "conditions": [
+          "capabilities.builtinWebSearch true",
+          "session toggle or webSearchDefault true",
+          "Engine surface includes web_search"
+        ],
+        "expectation": "Declare provider-native search, retain normalized audit report and apply protocol-specific replay rules."
+      },
+      "remoteCompact": {
+        "admitted": false,
+        "conditions": [],
+        "expectation": "No remote Responses compaction; portable summary remains available."
+      },
+      "replay": "Full context and plaintext reasoning_text Items, without unsupported storage/continuation/encrypted-include fields.",
+      "targetStage": "S3",
+      "evidenceRequirement": "Deterministic request/event/projection assertions plus bounded real endpoint lane; official OpenAI claims require the official endpoint. Missing selectors or credentials are unavailable, never passed.",
+      "currentStageEvidence": "not executed against live service in S0",
+      "maxTokensWhenAbsent": "field omitted"
+    }
+  ],
+  "profileDetails": {
+    "openai-public": [
+      "Bearer, store:false, public field/event admission; reasoning off maps to none.",
+      "Public WebSocket omits stream/background; exact owner continuation, socket lifecycle and HTTP fallback remain separately tested."
+    ],
+    "codex-http-relay": [
+      "HTTP only; omit service_tier; admit only the frozen nonsemantic relay diagnostics.",
+      "Reconstruct contiguous completed Items only after valid terminal commit if terminal output is empty/absent; semantic-subset terminal output retains fuller completed Items."
+    ],
+    "codex-beta-2026-02-06": [
+      "HTTP uses public request shape; WebSocket uses openai-beta: responses_websockets=2026-02-06 plus stream:true/stream_options.",
+      "No private Codex identity, attestation, x-codex headers or session/thread identifiers. Native web search is not admitted."
+    ],
+    "mimo-subset-2026-07-30": [
+      "HTTP only; Bearer or x-api-key; no remote compact or continuation.",
+      "Omit background/context_management/previous_response_id/parallel_tool_calls/store/stream_options/encrypted include/service tier/cache key.",
+      "reasoning_text family; off→none and xhigh/max→high; empty summary placeholder only, reject encrypted reasoning."
+    ],
+    "deepseek-subset-2026-07-31": [
+      "HTTP/Bearer only; exact model pair deepseek-v4-flash and deepseek-v4-pro.",
+      "No WebSocket/remote compact/continuation; plaintext reasoning_text; medium/xhigh→high, max→max."
+    ],
+    "deepseek-subset-2026-08-19": [
+      "Preserves July subset restrictions and model pair; additionally admits native web search.",
+      "Search-coupled encrypted reasoning token stays opaque; toggle-off or non-admitting profile degrades the entire native batch to portable text.",
+      "Audit query normalization may remove documented ws_call_id transport artifacts; raw native call Items remain replay authority."
+    ]
+  },
+  "crossCutting": [
+    "Cancellation interrupts requests/backoff; no implicit replay of committed user-visible output.",
+    "Generic adapter retries and Responses stream attempt retries have separate bounded contracts; do not multiply nested retry counts.",
+    "Provider proxy explicit/file/env precedence and redaction apply to HTTP and WebSocket; MCP/Tavily/Skill downloads do not inherit it.",
+    "Provider-owned opaque/signature/encrypted data must remain exact; normalization never strips it to obtain equality.",
+    "MCP dual-era behavior is a distinct tool/service matrix; no stdio transport is implied."
+  ],
+  "unsupportedCombinations": [
+    "responsesProfile or responsesTransport on non-Responses protocol",
+    "WebSocket on codex-http-relay or dated subsets",
+    "remoteCompact on MiMo or DeepSeek subsets",
+    "Responses x-goog-api-key; Responses x-api-key except MiMo",
+    "DeepSeek subset models outside the declared pair",
+    "Native search on Chat Completions, Anthropic, Codex profiles or frozen July subsets"
+  ],
+  "frozenWireFixtures": [
+    "tests/fixtures/openai-responses/codex-source-evidence-v1.json",
+    "tests/fixtures/openai-responses/compatibility-ledger-v1.json",
+    "tests/fixtures/openai-responses/event-captures-v1.json",
+    "tests/fixtures/openai-responses/lifecycle-v1.json",
+    "tests/fixtures/openai-responses/profile-v1.json",
+    "tests/fixtures/openai-responses/request-captures-v1.json"
+  ]
+}

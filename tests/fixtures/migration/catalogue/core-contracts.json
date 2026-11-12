@@ -1,0 +1,2080 @@
+{
+  "schemaVersion": 1,
+  "authority": "Authored preservation requirements; implementation and evidence remain separate.",
+  "capabilities": [
+    {
+      "id": "CAP-ASSET-MANIFEST",
+      "domain": "ASSET",
+      "behavior": "Verify the complete bundled V10 manifest, hashes, schema and declared host capabilities before activation.",
+      "anchors": [
+        "docs/dev/ASSETS.md",
+        "src/core/harness"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Tamper one declared file or capability; verification refuses the pack without activating a partial baseline.",
+      "negativeCase": "A changed asset hash or unknown required capability is accepted as a verified pack."
+    },
+    {
+      "id": "CAP-ASSET-OVERLAY",
+      "domain": "ASSET",
+      "behavior": "Resolve project and user sparse overrides above one complete selected baseline while keeping host extensions restricted.",
+      "anchors": [
+        "docs/dev/ASSETS.md",
+        "src/core/harness"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Place conflicting overrides and a missing selected-pack asset; precedence is deterministic and missing assets never come from another pack.",
+      "negativeCase": "A missing selected-pack file is silently borrowed from the bundled pack or the lower-priority override wins."
+    },
+    {
+      "id": "CAP-ASSET-INSTALL",
+      "domain": "ASSET",
+      "behavior": "Verify and install a complete local unpacked Harness without contacting a provider.",
+      "anchors": [
+        "docs/dev/ASSETS.md",
+        "src/core/harness"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Install malformed and valid pack directories; only the valid immutable pack becomes available.",
+      "negativeCase": "A malformed pack leaves a selectable partially installed baseline."
+    },
+    {
+      "id": "CAP-ASSET-SELECTION",
+      "domain": "ASSET",
+      "behavior": "Persist an explicit managed Pack selection and roll back to the bundled baseline.",
+      "anchors": [
+        "docs/dev/ASSETS.md",
+        "src/core/harness"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Select a verified pack, restart, then roll back; selected identities and on-disk lock agree at each step.",
+      "negativeCase": "Restart loads a different identity than the persisted selected-pack lock, or rollback retains the old selection."
+    },
+    {
+      "id": "CAP-ASSET-MATERIALIZE",
+      "domain": "ASSET",
+      "behavior": "Materialize requested project/global overrides and initialize editable assets without modifying the packaged baseline.",
+      "anchors": [
+        "docs/dev/ASSETS.md",
+        "src/core/harness"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Materialize a known prompt at each scope; source bytes remain unchanged and unsafe logical paths are rejected.",
+      "negativeCase": "Materialization edits packaged source bytes or writes outside the selected override scope."
+    },
+    {
+      "id": "CAP-ASSET-STATUS",
+      "domain": "ASSET",
+      "behavior": "Expose asset source, integrity and active Harness identity through offline status diagnostics.",
+      "anchors": [
+        "docs/dev/ASSETS.md",
+        "src/core/harness"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Inspect bundled and managed projects; report the actual selected source and fail integrity checks on drift.",
+      "negativeCase": "Status reports the bundled source while a managed pack is selected, or drift remains green."
+    },
+    {
+      "id": "CAP-ENGINE-DECLARATIONS",
+      "domain": "ENGINE",
+      "behavior": "Load every bundled Engine profile with ordered prompts, declared tools, validators, stop gates and state roots.",
+      "anchors": [
+        "docs/dev/ASSETS.md",
+        "src/core/engine"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Inspect all profile rows in the Engine matrix; reject unknown tools or malformed profiles rather than widening capabilities.",
+      "negativeCase": "An undeclared tool, validator or gate is admitted from an invalid profile."
+    },
+    {
+      "id": "CAP-ENGINE-PROMPT-COMPOSITION",
+      "domain": "ENGINE",
+      "behavior": "Compose ordered runtime prompt assets with explicit host extension boundaries and asset fingerprints.",
+      "anchors": [
+        "docs/dev/ASSETS.md",
+        "src/core/engine"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Dump and shape the same Engine; source order, provenance and lengths agree while shape omits complete prompt text.",
+      "negativeCase": "Prompt order differs from profile order or shape output leaks the complete prompt body."
+    },
+    {
+      "id": "CAP-ENGINE-HANDOFF",
+      "domain": "ENGINE",
+      "behavior": "Switch Engines with preserve-full or requested summary handoffs, keeping host preference records durable.",
+      "anchors": [
+        "docs/dev/ASSETS.md",
+        "src/core/engine"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Switch without summary and verify no provider request; requested summary uses the explicit compaction path and a handoff packet.",
+      "negativeCase": "A plain Engine switch calls the provider or loses the durable handoff context after restart."
+    },
+    {
+      "id": "CAP-CONFIG-DIRECTORY",
+      "domain": "CONFIG",
+      "behavior": "Keep provider profiles and secrets in user-level host state with documented override precedence, independent of the project cwd.",
+      "anchors": [
+        "docs/user/zh-CN/reference/configuration.md",
+        "src/config"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Vary providers-file, config-directory and platform directory inputs; never read a project-root .env as supported configuration.",
+      "negativeCase": "A project-root .env overrides the selected user-level credential directory."
+    },
+    {
+      "id": "CAP-CONFIG-SECRETS",
+      "domain": "CONFIG",
+      "behavior": "Resolve apiKeyEnv through sibling .env before process fallback and redact inspection output.",
+      "anchors": [
+        "docs/user/zh-CN/reference/configuration.md",
+        "src/config"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Set different file/process secrets; select the file value while config show and diagnostics never expose secret values.",
+      "negativeCase": "A process credential overrides a nonempty sibling-file credential or diagnostics print the secret."
+    },
+    {
+      "id": "CAP-CONFIG-REGISTRY-TRANSACTION",
+      "domain": "CONFIG",
+      "behavior": "Validate provider/model edits and serialize atomically while preserving unrelated comments, order and fields.",
+      "anchors": [
+        "docs/user/zh-CN/reference/configuration.md",
+        "src/config"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Add, set and remove one registry entry; invalid cross-field input preserves original bytes and valid edits preserve unrelated content.",
+      "negativeCase": "An invalid cross-field edit changes bytes or a valid edit destroys unrelated comments/defaults."
+    },
+    {
+      "id": "CAP-CONFIG-ENV-STRUCTURE",
+      "domain": "CONFIG",
+      "behavior": "Create empty secret slots, remove keys and set proxy structure without accepting API keys as CLI arguments.",
+      "anchors": [
+        "docs/user/zh-CN/reference/configuration.md",
+        "src/config"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Manage a synthetic environment file; secret-valued command input is rejected and existing unrelated entries remain intact.",
+      "negativeCase": "An empty-slot operation erases an existing secret or a command accepts an API key value as an argument."
+    },
+    {
+      "id": "CAP-CONFIG-DISCOVERY",
+      "domain": "CONFIG",
+      "behavior": "Discover provider models and expose configuration/credential/capability diagnostics without treating presence as connectivity proof.",
+      "anchors": [
+        "docs/user/zh-CN/reference/configuration.md",
+        "src/config"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Use a finite local discovery response and missing credentials; report available models or an actionable failure without inventing reachability.",
+      "negativeCase": "An unavailable discovery endpoint is reported as successful or capabilities are inferred from a model name."
+    },
+    {
+      "id": "CAP-CONFIG-VALIDATION",
+      "domain": "CONFIG",
+      "behavior": "Validate supported YAML shapes, duplicate/cross-field constraints and file-specific unknown-key policies.",
+      "anchors": [
+        "docs/user/zh-CN/reference/configuration.md",
+        "src/config"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Exercise invalid fields and unsupported versions using the configuration matrix; failed writes preserve the original files.",
+      "negativeCase": "Unsupported schema or duplicate/unknown fields bypass the file-specific parser and are persisted."
+    },
+    {
+      "id": "CAP-INSTRUCTION-SCOPES",
+      "domain": "INSTRUCTION",
+      "behavior": "Resolve user then project instructions, with Engine-specific files replacing generic files even when empty.",
+      "anchors": [
+        "docs/dev/PERSISTENT_INSTRUCTIONS.md",
+        "src/core/instructions"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Provide four conflicting instruction files; selected content follows scope/Engine precedence and an empty override suppresses fallback.",
+      "negativeCase": "An empty Engine-specific file falls back to generic content or user content overrides project scope."
+    },
+    {
+      "id": "CAP-INSTRUCTION-FREEZE",
+      "domain": "INSTRUCTION",
+      "behavior": "Freeze instruction context within a paused turn, refresh between turns, and refresh after an approved instruction tool mutation.",
+      "anchors": [
+        "docs/dev/PERSISTENT_INSTRUCTIONS.md",
+        "src/core/instructions"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Edit instructions while a gate is pending in the same process; external edits wait until a new turn, while a successful approved update affects the next request. A fresh process recomposes bounded context.",
+      "negativeCase": "An in-process paused turn unexpectedly adopts an external edit, or an approved instruction mutation fails to refresh the next round."
+    },
+    {
+      "id": "CAP-INSTRUCTION-BOUNDARY",
+      "domain": "INSTRUCTION",
+      "behavior": "Bound UTF-8 instruction content, reject linked targets and enumerate only owned instruction filenames.",
+      "anchors": [
+        "docs/dev/PERSISTENT_INSTRUCTIONS.md",
+        "src/core/instructions"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Supply oversized, malformed or symlinked instructions; warn and omit them without granting tools or aborting an ordinary turn.",
+      "negativeCase": "An oversized or linked instruction target is injected into model context or widens host authority."
+    },
+    {
+      "id": "CAP-INSTRUCTION-MUTATION",
+      "domain": "INSTRUCTION",
+      "behavior": "Apply approved instruction update/delete with expected-hash concurrency checks, atomic replacement and a recoverable previous state.",
+      "anchors": [
+        "docs/dev/PERSISTENT_INSTRUCTIONS.md",
+        "src/core/instructions"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Race an external edit against an update; stale hashes refuse mutation and successful changes report the actual backup or prior absence.",
+      "negativeCase": "A stale expected hash overwrites a concurrent edit or the previous state cannot be recovered."
+    },
+    {
+      "id": "CAP-INSTRUCTION-INIT",
+      "domain": "INSTRUCTION",
+      "behavior": "Generate project instructions only on explicit /init; existing files require --force and a previous-file backup.",
+      "anchors": [
+        "docs/dev/PERSISTENT_INSTRUCTIONS.md",
+        "src/core/instructions"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Try /init on an existing VESICLE.md; reject before provider use unless force is explicit, then retain the previous content.",
+      "negativeCase": "Existing VESICLE.md is overwritten without force or the forced replacement omits its backup."
+    },
+    {
+      "id": "CAP-INSTRUCTION-REWIND-EXCLUSION",
+      "domain": "INSTRUCTION",
+      "behavior": "Keep instruction configuration outside conversation/file rewind and disclose its separate backup recovery.",
+      "anchors": [
+        "docs/dev/PERSISTENT_INSTRUCTIONS.md",
+        "src/core/instructions"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Update instructions then rewind the conversation; the file remains changed and the reported backup can restore its previous state.",
+      "negativeCase": "Conversation rewind silently edits instruction configuration or claims it restored that configuration."
+    },
+    {
+      "id": "CAP-LOOP-TOOL-ROUNDS",
+      "domain": "LOOP",
+      "behavior": "Execute bounded multi-round normalized tool calls and continue with correctly paired results.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/agent-loop"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Use a scripted two-round tool response; the next request includes each tool result exactly once and successful writes match disk bytes.",
+      "negativeCase": "A result is missing/duplicated on continuation or a successful write result disagrees with disk bytes."
+    },
+    {
+      "id": "CAP-LOOP-DURABILITY",
+      "domain": "LOOP",
+      "behavior": "Persist user, assistant, tool and host events before continuations depend on them.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/agent-loop"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Inspect JSONL when a follow-up provider request arrives; required tool results already exist and survive a fresh process.",
+      "negativeCase": "A follow-up provider request arrives before the paired tool result exists in JSONL."
+    },
+    {
+      "id": "CAP-LOOP-FAILURE",
+      "domain": "LOOP",
+      "behavior": "Mark failed/interrupted turn tails and repair provider-visible history without destroying physical records.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/agent-loop"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Interrupt before a terminal response, resume, and verify no fabricated successful assistant answer or repeated side effect.",
+      "negativeCase": "Restart turns a failed partial response into a successful reply or repeats its tool side effect."
+    },
+    {
+      "id": "CAP-LOOP-CANCELLATION",
+      "domain": "LOOP",
+      "behavior": "Forward cancellation through provider, tool and child-process boundaries and return control to the host.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/agent-loop"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Cancel a stalled stream or running tool; bounded cleanup occurs and cancellation remains distinct from provider failure.",
+      "negativeCase": "Cancellation is retried as an ordinary network failure or leaves an owned process running."
+    },
+    {
+      "id": "CAP-LOOP-GUARDS",
+      "domain": "LOOP",
+      "behavior": "Enforce no-progress, output/context and turn-boundary guards without transferring host ownership to adapters.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/agent-loop"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Repeat nonprogressing tool responses and oversized context; guards stop or compact at the declared boundary and retain diagnostic evidence.",
+      "negativeCase": "Nonprogressing failures loop past the configured guard or oversized context is sent past the hard ceiling."
+    },
+    {
+      "id": "CAP-LOOP-USAGE",
+      "domain": "LOOP",
+      "behavior": "Expose streaming activity and normalized usage while preserving auxiliary title/Judge costs separately.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/agent-loop"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Emit known usage and auxiliary events; main and auxiliary counters retain their distinct attribution across resume.",
+      "negativeCase": "Title/Judge cost is counted as main-turn usage or replay double-counts a logical turn."
+    },
+    {
+      "id": "CAP-INTERACTION-GATE",
+      "domain": "INTERACTION",
+      "behavior": "Pause only for stop gates declared by the active Engine and continue with durable acceptance/rejection feedback.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/agent-loop"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Request a declared and an undeclared gate; only the declared gate pauses, and the invalid request becomes a failed tool result.",
+      "negativeCase": "An undeclared stop gate pauses the session or a rejected gate is treated as permission to proceed."
+    },
+    {
+      "id": "CAP-INTERACTION-QUESTION",
+      "domain": "INTERACTION",
+      "behavior": "Persist structured clarification options, free-form/skip responses and exact call bindings.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/agent-loop"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Pause with a question, restart, and answer; the same request resumes with one durable paired result.",
+      "negativeCase": "Restart loses the original question/call binding or answering appends duplicate tool results."
+    },
+    {
+      "id": "CAP-INTERACTION-ENGINE-SWITCH",
+      "domain": "INTERACTION",
+      "behavior": "Treat model-requested Engine switching as a separate durable workflow decision.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/agent-loop"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Request a handoff and reject or accept it after restart; preserve context and do not confuse it with permission approval.",
+      "negativeCase": "A model-requested switch takes effect before confirmation or rejection changes the active Engine."
+    },
+    {
+      "id": "CAP-INTERACTION-RESTORE",
+      "domain": "INTERACTION",
+      "behavior": "Recover pending gates, questions, permissions and delegation decisions without silently granting them.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/agent-loop"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Reload each pending corpus case; retain the intended interaction and suppress stale requests superseded by later turns.",
+      "negativeCase": "A superseded question/permission/gate is resurrected from an older record."
+    },
+    {
+      "id": "CAP-SESSION-APPEND",
+      "domain": "SESSION",
+      "behavior": "Store append-only JSONL with UUID/parent links and support legacy linear records without those fields.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Load legacy-linear and append a new turn in a sandbox; old bytes remain a prefix and history order remains correct.",
+      "negativeCase": "Appending a new turn rewrites/truncates original legacy bytes or reorders the recovered history."
+    },
+    {
+      "id": "CAP-SESSION-BRANCH-PROJECTION",
+      "domain": "SESSION",
+      "behavior": "Project content from the selected parent chain while retaining inactive histories and rejecting cycles/missing parents.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Select nested branches and malformed links; active messages follow ancestry, inactive records remain durable, bad links fail explicitly.",
+      "negativeCase": "Inactive sibling content enters the provider history or a parent cycle is silently tolerated."
+    },
+    {
+      "id": "CAP-SESSION-HOST-STATE",
+      "domain": "SESSION",
+      "behavior": "Project provider, Engine, permissions, title and migrated identities from physical record order across branch heads.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Read an older branch after host-state changes; content rewinds while the latest host preferences and migrated identity remain effective.",
+      "negativeCase": "Selecting an older branch restores pre-migration identity or stale provider/permission preferences."
+    },
+    {
+      "id": "CAP-SESSION-PROVIDER-STATE",
+      "domain": "SESSION",
+      "behavior": "Clone bounded versioned provider state without interpreting opaque payloads and reject malformed required envelopes.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Replay signatures/encrypted state byte-for-byte; unknown required versions refuse resume rather than dropping state.",
+      "negativeCase": "Opaque signature/encrypted bytes change or an unknown required envelope version is silently dropped."
+    },
+    {
+      "id": "CAP-SESSION-REPLAY-PAIRING",
+      "domain": "SESSION",
+      "behavior": "Repair dangling and interrupted tool sequences into legal provider histories without rerunning indeterminate work.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Load paused/failed tool tails; synthetic failure placeholders pair correctly and reload does not accumulate duplicates.",
+      "negativeCase": "An indeterminate tool runs again or repeated reload accumulates synthetic failure placeholders."
+    },
+    {
+      "id": "CAP-SESSION-DISCOVERY",
+      "domain": "SESSION",
+      "behavior": "List, select and resume project sessions while hiding child sessions from the ordinary picker by default.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "List a project containing parent and child JSONL files; parent summaries reflect actual pending state and explicit child listing remains available.",
+      "negativeCase": "Child sessions appear in the ordinary picker or a pending-state summary is attributed to the wrong parent."
+    },
+    {
+      "id": "CAP-MIGRATION-PREFLIGHT",
+      "domain": "MIGRATION",
+      "behavior": "Evaluate identity migration offline and refuse blocking compatibility findings before modifying the session.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session/session-migration.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Use valid and malformed identity/candidate fixtures; a blocking report leaves original session and adjacent data unchanged.",
+      "negativeCase": "A blocking preflight mutates the original session or calls a remote provider."
+    },
+    {
+      "id": "CAP-MIGRATION-ARCHIVE",
+      "domain": "MIGRATION",
+      "behavior": "Archive pre-migration bytes and append a confirmed identity/catalog rebind without rewriting historical records.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session/session-migration.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Complete a confirmed migration in an isolated copy; archive and old prefix survive and the new identity is session-wide.",
+      "negativeCase": "Confirmed identity rebind loses original archive bytes or applies only to one old branch."
+    },
+    {
+      "id": "CAP-MIGRATION-FAIL-CLOSED",
+      "domain": "MIGRATION",
+      "behavior": "Reject malformed required migration metadata and preserve original artifacts on failed migration/read paths.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session/session-migration.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Load malformed-migration and missing-data cases; expose a precise failure while original tree hashes remain unchanged.",
+      "negativeCase": "A malformed required identity activates a partial migration or failed recovery destroys original data."
+    },
+    {
+      "id": "CAP-ATTACHMENT-ADDRESSING",
+      "domain": "ATTACHMENT",
+      "behavior": "Store supported images by content hash and persist reference-only metadata rather than base64.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/attachments/store.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Ingest a synthetic image twice; references identify the same content and durable records contain no image payload.",
+      "negativeCase": "Identical images use inconsistent content identity or base64 bodies enter JSONL."
+    },
+    {
+      "id": "CAP-ATTACHMENT-MATERIALIZATION",
+      "domain": "ATTACHMENT",
+      "behavior": "Materialize image bytes only in request copies and enforce hash/MIME/size/vision boundaries.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/attachments/store.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Load valid, missing and corrupted image corpus cases; only valid content reaches a vision-enabled request and originals remain unchanged.",
+      "negativeCase": "Missing/corrupt attachment bytes are sent upstream or a non-vision request silently accepts an image."
+    },
+    {
+      "id": "CAP-REWIND-CHECKPOINTS",
+      "domain": "REWIND",
+      "behavior": "Capture per-turn file state, absence, directory topology and content-addressed backups for approved roots.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/checkpoints"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Create, move and delete nested artifacts across turns; checkpoints preserve enough pre-state for declared rewind modes.",
+      "negativeCase": "Restore loses absent-path state, file content or empty-directory topology after a guarded move."
+    },
+    {
+      "id": "CAP-REWIND-MODES",
+      "domain": "REWIND",
+      "behavior": "Support conversation-only, file-only and combined rewind with correct branch selection and partial-failure reporting.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/checkpoints"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Rewind a turn in each mode; history and disk change only as requested, and interrupted restoration never reports full success.",
+      "negativeCase": "File-only rewind changes conversation ancestry or conversation-only rewind overwrites files."
+    },
+    {
+      "id": "CAP-REWIND-EXEMPTIONS",
+      "domain": "REWIND",
+      "behavior": "Exclude scratch tmp and arbitrary host-process side effects from rewind guarantees and expose process taint.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/checkpoints"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Modify scratch and run a host process before rewind; retain explicit exclusions/taint instead of claiming whole-host restoration.",
+      "negativeCase": "The UI claims to undo scratch or arbitrary host-process side effects without an explicit exclusion/taint."
+    },
+    {
+      "id": "CAP-CANDIDATE-TREE",
+      "domain": "CANDIDATE",
+      "behavior": "Enumerate nested candidate forks including inactive subtrees and keep candidate navigation at the chosen depth.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session/selection.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Load nested-candidates and inspect both nested branches; endpoints stay scoped and selecting one does not erase siblings.",
+      "negativeCase": "Selecting a nested leaf erases a sibling or re-arms navigation at the wrong fork depth."
+    },
+    {
+      "id": "CAP-CANDIDATE-REGENERATE",
+      "domain": "CANDIDATE",
+      "behavior": "Regenerate a logical turn into a new retained candidate with the correct fork baseline.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session/selection.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Run a scripted regeneration; prior content and file bundles remain available and the new reply belongs to the same fork.",
+      "negativeCase": "Regeneration reuses the wrong fork file baseline or destroys the previous candidate subtree."
+    },
+    {
+      "id": "CAP-CANDIDATE-FILE-RESTORE",
+      "domain": "CANDIDATE",
+      "behavior": "Capture full version-2 manifests and restore the selected candidate's protected artifact state.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session/selection.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Switch alpha/beta candidates with changed and absent files; active disk hashes agree with the selected bundle.",
+      "negativeCase": "Selected candidate and actual protected-root bytes/absence differ after a reported successful switch."
+    },
+    {
+      "id": "CAP-CANDIDATE-RECOVERY",
+      "domain": "CANDIDATE",
+      "behavior": "Recapture user edits before switching and expose degraded/missing/tainted restoration outcomes honestly.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session/selection.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Edit active artifacts or damage a backup, then switch; preserve edits when supported and never label incomplete restoration successful.",
+      "negativeCase": "A missing backup is reported as a complete restore or active manual edits are lost without a degradation report."
+    },
+    {
+      "id": "CAP-COMPACT-PORTABLE",
+      "domain": "COMPACT",
+      "behavior": "Persist a versioned portable replacement-history checkpoint while retaining the physical transcript.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/compact"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Load compact-state; replacement plus suffix projects correctly, old records remain, and unsupported checkpoint versions fail closed.",
+      "negativeCase": "Compaction deletes physical transcript bytes or an unsupported checkpoint version projects partially."
+    },
+    {
+      "id": "CAP-COMPACT-PAIRED-TAIL",
+      "domain": "COMPACT",
+      "behavior": "Retain coherent tool pairs and requested recent context when constructing compacted history.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/compact"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Compact around multi-tool turns and images; retained history is replayable and attachments are materialized only for requests.",
+      "negativeCase": "A retained assistant call has no paired result or compacted history inlines attachment base64 into durable state."
+    },
+    {
+      "id": "CAP-COMPACT-AUTO-BUDGET",
+      "domain": "COMPACT",
+      "behavior": "Apply explicit soft/hard context budgets with output-reservation precedence and safe pre-turn/mid-turn boundaries.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/compact"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Cross configured thresholds after queued/background inputs; compact or block the exact next request without an implicit default threshold.",
+      "negativeCase": "An implicit default threshold activates compaction or queued inputs bypass the exact-send budget check."
+    },
+    {
+      "id": "CAP-COMPACT-TRANSACTION",
+      "domain": "COMPACT",
+      "behavior": "Commit compacted context only if the source head is still current and cancellation has not won.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/compact"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Race a new turn or cancellation against summary completion; stale results do not replace the active head.",
+      "negativeCase": "A stale summary commits over a newer head or commits after cancellation has won."
+    },
+    {
+      "id": "CAP-FILES-PATH-GUARD",
+      "domain": "FILES",
+      "behavior": "Reject absolute, parent-escape and linked-path escapes behind model-visible filesystem tools.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/tools/file"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Attempt guarded writes outside the approved roots and through links; an outside sentinel remains unchanged.",
+      "negativeCase": "A relative escape or symlink/junction causes an outside sentinel to change."
+    },
+    {
+      "id": "CAP-FILES-VIRTUAL-ROOTS",
+      "domain": "FILES",
+      "behavior": "Expose only the declared project, asset and activated-Skill namespaces with read/write distinctions.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/tools/file"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "List virtual roots and try writes to read-only namespaces; listing and errors preserve the capability boundary.",
+      "negativeCase": "A write enters assets/ or activated skills/ or listing exposes an unapproved root."
+    },
+    {
+      "id": "CAP-FILES-READ-BOUNDS",
+      "domain": "FILES",
+      "behavior": "Support bounded byte/line reads, grep modes/context/caps and safe image views with meaningful truncation.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/tools/file"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Read multibyte and large fixtures at boundaries; returned ranges and truncation match the requested operation without corrupting UTF-8.",
+      "negativeCase": "A bounded multibyte read splits UTF-8 or returns content beyond the declared range/cap."
+    },
+    {
+      "id": "CAP-PERMISSION-MODES",
+      "domain": "PERMISSION",
+      "behavior": "Change approval friction through MANUAL/INERTIA/MOMENTUM/YOLO without widening tool scope.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/permissions"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Repeat the same forbidden path or unsupported tool under every mode; capability and path checks remain enforced.",
+      "negativeCase": "YOLO permits a path or tool capability rejected under the other modes."
+    },
+    {
+      "id": "CAP-PERMISSION-YOLO-LIFETIME",
+      "domain": "PERMISSION",
+      "behavior": "Keep YOLO process-scoped, explicitly confirmed and nonpersistable as a default.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/permissions"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Attempt to persist YOLO and resume a former YOLO session; persisted defaults are refused and resumed privilege is downgraded.",
+      "negativeCase": "YOLO persists as a default or a resumed session silently regains process-scoped bypass authority."
+    },
+    {
+      "id": "CAP-PERMISSION-BINDING",
+      "domain": "PERMISSION",
+      "behavior": "Bind approvals to exact tool calls and shell plans, retaining rejection notes and durable resolutions.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/permissions"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Change a command after approval or resume a pending request; stale bindings cannot authorize another operation.",
+      "negativeCase": "Approval for one tool call/command hash authorizes a changed command or another child's call."
+    },
+    {
+      "id": "CAP-PROCESS-EXECUTION",
+      "domain": "PROCESS",
+      "behavior": "Run selected host shell profiles with structured invocation, filtered environment and bounded UTF-8 output.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/process"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Execute finite synthetic commands for each available profile with a disallowed synthetic secret in the parent environment; the child allowlist excludes it and output limits preserve valid text.",
+      "negativeCase": "A synthetic secret outside the child allowlist is inherited, or output truncation produces invalid UTF-8."
+    },
+    {
+      "id": "CAP-PROCESS-CLEANUP",
+      "domain": "PROCESS",
+      "behavior": "Enforce timeout, cancellation and process-tree cleanup for foreground/background commands.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/process"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Start a descendant process and cancel or time out; all owned processes stop and the result reports the actual outcome.",
+      "negativeCase": "A cancelled/timed-out command leaves owned descendants alive or reports success."
+    },
+    {
+      "id": "CAP-PROCESS-BACKGROUND",
+      "domain": "PROCESS",
+      "behavior": "Persist background shell state and deliver completion notifications exactly once as untrusted host context.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/process"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Restart with completed and indeterminate tasks; no command is replayed and already-recorded notifications are not delivered twice.",
+      "negativeCase": "Restart re-executes an indeterminate command or delivers an acknowledged completion twice."
+    },
+    {
+      "id": "CAP-TRANSPORT-PROXY",
+      "domain": "TRANSPORT",
+      "behavior": "Apply provider-proxy/file/environment/no_proxy precedence to HTTP and WebSocket without leaking credentials.",
+      "anchors": [
+        "docs/dev/PROVIDERS.md",
+        "src/providers/shared"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Use local CONNECT fixtures with bypass and 407 failures; routing and redacted errors match configuration and auth failure is terminal.",
+      "negativeCase": "Explicit routing is bypassed by NO_PROXY, proxy credentials leak, or407 retries despite terminal auth failure."
+    },
+    {
+      "id": "CAP-TRANSPORT-RETRY",
+      "domain": "TRANSPORT",
+      "behavior": "Bound provider retries/fallback/prewarm and forbid incomplete-stream tool side effects.",
+      "anchors": [
+        "docs/dev/PROVIDERS.md",
+        "src/providers/shared"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "End SSE/WS before successful terminal commit; no host tool runs and retry budgets include every attempt.",
+      "negativeCase": "Retry budgets multiply across wrappers or a partial tool delta executes before terminal commit."
+    },
+    {
+      "id": "CAP-WEB-HOST-TOOLS",
+      "domain": "WEB",
+      "behavior": "Expose Tavily research tools only when credentials and Engine scope permit them.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/tools/web"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Compare missing/configured credential surfaces and finite fixture results; absent credentials hide tools and citations retain provenance.",
+      "negativeCase": "Missing credentials still expose Tavily tools or normalized results lose source provenance."
+    },
+    {
+      "id": "CAP-WEB-NATIVE-SEARCH",
+      "domain": "WEB",
+      "behavior": "Gate built-in search on model capability, exact protocol/profile and Engine surface while suppressing duplicate host search.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/core/tools/web"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Toggle search on supported/unsupported combinations; only admitted requests include native search and audits persist query/citation data.",
+      "negativeCase": "An unsupported profile emits a native search declaration or native and host search are redundantly exposed."
+    },
+    {
+      "id": "CAP-MCP-NEGOTIATION",
+      "domain": "MCP",
+      "behavior": "Support mixed legacy, modern and auto Streamable HTTP registries with explicit version negotiation.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/mcp"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Use finite servers in both eras and auto fallback; unavailable modern negotiation does not fabricate successful discovery.",
+      "negativeCase": "Auto fallback fabricates a modern negotiation success or erases the selected legacy revision."
+    },
+    {
+      "id": "CAP-MCP-SURFACE",
+      "domain": "MCP",
+      "behavior": "Validate/filter MCP schemas and apply server/Engine/tool scope before exposing calls.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/mcp"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Change include/exclude/Engine filters and malformed schemas; only admitted names are callable and collisions remain explicit.",
+      "negativeCase": "An excluded/malformed/colliding remote tool becomes callable through its alias."
+    },
+    {
+      "id": "CAP-MCP-RESULTS",
+      "domain": "MCP",
+      "behavior": "Validate untrusted text and inline images while refusing automatic resource/audio/link promotion.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/mcp"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Return mixed content, error results and no-vision images; preserve safe text and do not fetch untrusted URLs or import refused media.",
+      "negativeCase": "An untrusted resource/URL/audio result is fetched or promoted into model input automatically."
+    },
+    {
+      "id": "CAP-MCP-LIFECYCLE",
+      "domain": "MCP",
+      "behavior": "Bound connection/call timeouts, cancellation, stale-session retry and safe redirects with redacted failures.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/mcp"
+      ],
+      "introducedAt": "Lifecycle existed at12dd7b6241d55cc462d949f5221ebabfe502984c; safe redirect policy and complete reconnect redaction fixed byf0e1ffc5152718cb4dfb59e6a48df1b401103a10, merged as00e5ab35174466e101ba2439e552415164edb63d (#338).",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Reconnect through same/cross-origin redirects; forbidden destinations receive no secrets and retry errors remain sanitized.",
+      "negativeCase": "A cross-origin redirect receives authentication headers/body or a reconnect error exposes a secret URL."
+    },
+    {
+      "id": "CAP-MCP-PERSISTENCE",
+      "domain": "MCP",
+      "behavior": "Optionally retain complete outputs in scratch and replace oversized inline text with a bounded preview/reference.",
+      "anchors": [
+        "docs/dev/TOOLS.md",
+        "src/mcp"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "With persistence off, neither spill nor auto-truncation occurs. With persistence on, retain complete output; only the enabled auto-truncate setting replaces oversized inline text with its preview/reference.",
+      "negativeCase": "Truncation occurs while persistence is disabled, or the advertised retained file does not contain complete bytes."
+    },
+    {
+      "id": "CAP-SKILL-PARSER",
+      "domain": "SKILL",
+      "behavior": "Validate bounded SKILL.md metadata, UTF-8, names, resource inventory and path/link safety.",
+      "anchors": [
+        "docs/dev/SKILLS.md",
+        "src/skills"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Load valid and malformed roots; invalid entries produce diagnostics without being silently accepted.",
+      "negativeCase": "Malformed metadata or a linked escaping resource is accepted as an activatable Skill."
+    },
+    {
+      "id": "CAP-SKILL-CATALOG",
+      "domain": "SKILL",
+      "behavior": "Resolve host/Harness/installed/user/project precedence, disabled names and shadowing deterministically.",
+      "anchors": [
+        "docs/dev/SKILLS.md",
+        "src/skills"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Install same-name Skills across scopes; the documented winner and diagnostics are visible and only eligible entries activate.",
+      "negativeCase": "A shadowed or disabled Skill replaces the frozen eligible winner without a diagnostic."
+    },
+    {
+      "id": "CAP-SKILL-STORE",
+      "domain": "SKILL",
+      "behavior": "Install immutable Skill snapshots from supported local/Git sources with locking, rollback and transactional failure handling.",
+      "anchors": [
+        "docs/dev/SKILLS.md",
+        "src/skills"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Update, roll back and fail an installation; the active snapshot never becomes a partial or falsely successful result.",
+      "negativeCase": "Failed install/update leaves a partial active snapshot or destroys the previous rollback version."
+    },
+    {
+      "id": "CAP-SKILL-FREEZE",
+      "domain": "SKILL",
+      "behavior": "Freeze per-session name/hash identities, preserve them across resume and explicitly refresh/migrate the catalog.",
+      "anchors": [
+        "docs/dev/SKILLS.md",
+        "src/skills"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Change a Skill body after freezing; no silent substitution occurs and refresh reports changed/removed/added entries.",
+      "negativeCase": "A changed body silently substitutes for the session's frozen name/hash identity."
+    },
+    {
+      "id": "CAP-SKILL-ACTIVATION",
+      "domain": "SKILL",
+      "behavior": "Activate Skills with task/context-only semantics and retain activation/resource provenance across compact/rewind.",
+      "anchors": [
+        "docs/dev/SKILLS.md",
+        "src/skills"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Activate and inspect resources, then compact or rewind; mounts follow live activations and stale hashes cannot masquerade as current content.",
+      "negativeCase": "An inactive or stale-hash Skill remains mounted after rewind/eligibility changes."
+    },
+    {
+      "id": "CAP-SKILL-SCRIPTS",
+      "domain": "SKILL",
+      "behavior": "Execute Skill scripts only through process/permission scope and preserved resource boundaries.",
+      "anchors": [
+        "docs/dev/SKILLS.md",
+        "src/skills"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Try disabled process capability, unsafe resource paths and cancellation; all normal process guarantees remain enforced.",
+      "negativeCase": "Script execution bypasses independent skill_exec approval, activated-resource guards or process cleanup limits."
+    },
+    {
+      "id": "CAP-SKILL-AUTHORING",
+      "domain": "SKILL",
+      "behavior": "Validate and publish authored drafts through explicit project/installed destinations with rollback-safe updates.",
+      "anchors": [
+        "docs/dev/SKILLS.md",
+        "src/skills"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Create and publish a synthetic draft; invalid content cannot replace a working Skill and target scope is explicit.",
+      "negativeCase": "An invalid draft replaces a working Skill or publishing writes into the wrong scope."
+    },
+    {
+      "id": "CAP-FIRSTPARTY-DOCS",
+      "domain": "FIRSTPARTY",
+      "behavior": "Ship vesicle-docs with synchronized read-only public references and explicit runtime documentation access.",
+      "anchors": [
+        "docs/dev/SKILLS.md",
+        "host-assets/skills"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Inspect/install the package and read a bundled reference through an activated Skill; the reference matches its authoritative source.",
+      "negativeCase": "Packaged documentation references differ from the canonical tracked pages or require process execution to read."
+    },
+    {
+      "id": "CAP-FIRSTPARTY-SKILLIFY",
+      "domain": "FIRSTPARTY",
+      "behavior": "Provide draft, validate and publish procedures for user-authored Skills through supported CLI wrappers.",
+      "anchors": [
+        "docs/dev/SKILLS.md",
+        "host-assets/skills"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Run a synthetic authoring flow; wrappers use the current host executable/configuration and never claim publication before successful writes.",
+      "negativeCase": "The wrapper invokes a different runtime/config directory or reports publication before the checked write succeeds."
+    },
+    {
+      "id": "CAP-FIRSTPARTY-NOVEL-OUTLINE",
+      "domain": "FIRSTPARTY",
+      "behavior": "Preserve the bundled novel-outline-v3 Skill, templates/resources and workflow procedures.",
+      "anchors": [
+        "docs/dev/SKILLS.md",
+        "host-assets/skills"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Resolve its frozen catalog entry and packaged resources; missing resources or drift fail explicitly rather than substituting content.",
+      "negativeCase": "A missing packaged resource is silently replaced by an unrelated Skill body/template."
+    },
+    {
+      "id": "CAP-FIRSTPARTY-UPDATE-CONFIG",
+      "domain": "FIRSTPARTY",
+      "behavior": "Preserve update-config guidance and host self-invocation wrappers for validated non-secret configuration changes.",
+      "anchors": [
+        "docs/dev/SKILLS.md",
+        "host-assets/skills"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Invoke a finite configuration update through the packaged wrapper; correct user-level location and atomic validation apply.",
+      "negativeCase": "The wrapper edits project-root .env or bypasses atomic validation of the selected user configuration."
+    },
+    {
+      "id": "CAP-AGENT-PROFILES",
+      "domain": "AGENT",
+      "behavior": "Load generic, Harness and custom Agent profiles with declared capabilities and Driver bindings.",
+      "anchors": [
+        "docs/dev/SUBAGENTS.md",
+        "src/core/agents"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Enumerate all profile inventory entries; reject invalid capabilities/Driver contracts without expanding scope.",
+      "negativeCase": "An invalid custom profile or Driver binding widens child tools/MCP authority."
+    },
+    {
+      "id": "CAP-AGENT-EXECUTION",
+      "domain": "AGENT",
+      "behavior": "Run foreground/background Agents with bounded concurrency, inherited context and parent-owned lifetime.",
+      "anchors": [
+        "docs/dev/SUBAGENTS.md",
+        "src/core/agents"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Schedule parallel synthetic children at the configured limit; excess work queues and completion remains associated with its parent call.",
+      "negativeCase": "Active children exceed the configured concurrency limit or a result is bound to another parent call."
+    },
+    {
+      "id": "CAP-AGENT-PERMISSIONS",
+      "domain": "AGENT",
+      "behavior": "Relay child permission requests through the parent broker without widening child tool or MCP scope.",
+      "anchors": [
+        "docs/dev/SUBAGENTS.md",
+        "src/core/agents"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Have a child request a restricted operation; parent approval remains bound to the exact child call and denial propagates.",
+      "negativeCase": "Parent approval for one child call authorizes another operation or denial is dropped."
+    },
+    {
+      "id": "CAP-AGENT-CONTROL",
+      "domain": "AGENT",
+      "behavior": "List, message, interrupt and wait on Agent handles with deterministic lookup and explicit retry semantics.",
+      "anchors": [
+        "docs/dev/SUBAGENTS.md",
+        "src/core/agents"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Address known, unknown and terminal handles; interruptions and retry decisions do not fabricate running work or duplicate a delivery.",
+      "negativeCase": "An unknown/terminal handle is reported as running or retry duplicates already delivered work."
+    },
+    {
+      "id": "CAP-AGENT-DURABILITY",
+      "domain": "AGENT",
+      "behavior": "Persist child metadata, sessions and inbox transitions with exactly-once terminal delivery and interrupted recovery.",
+      "anchors": [
+        "docs/dev/SUBAGENTS.md",
+        "src/core/agents"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Load background-agent corpus and restart interrupted children; acknowledged results stay acknowledged and no completed work is replayed.",
+      "negativeCase": "Restart repeats completed child work or changes acknowledged terminal-result delivery back to pending."
+    },
+    {
+      "id": "CAP-QUALITY-DETECTOR",
+      "domain": "QUALITY",
+      "behavior": "Apply deterministic rules and document metrics to actual delivered prose and artifact post-images.",
+      "anchors": [
+        "docs/dev/QUALITY_GUARD.md",
+        "src/core/quality"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Use known clean/finding/inconclusive texts; unreadable, oversized or budget-exhausted targets never become clean assessments.",
+      "negativeCase": "Unreadable/oversized/budget-exhausted targets are reported clean or a published finding loses its evidence span."
+    },
+    {
+      "id": "CAP-QUALITY-REWRITE",
+      "domain": "QUALITY",
+      "behavior": "Retain per-target rejection hashes and bounded rewrite attempts, persisting decisions before more provider work.",
+      "anchors": [
+        "docs/dev/QUALITY_GUARD.md",
+        "src/core/quality"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Repeat a rejected target or exhaust attempts; surface a durable decision rather than loop indefinitely or silently deliver rejected prose.",
+      "negativeCase": "A repeated candidate hash loops indefinitely or rewrite exhaustion omits the durable user decision."
+    },
+    {
+      "id": "CAP-QUALITY-DECISIONS",
+      "domain": "QUALITY",
+      "behavior": "Resume quality decisions and accept/stop without another provider call while retaining applicable warnings.",
+      "anchors": [
+        "docs/dev/QUALITY_GUARD.md",
+        "src/core/quality"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Load quality-decision and quality-accepted; accepted warnings keep their resolution and rejected candidates never appear as delivered replies.",
+      "negativeCase": "Accept/stop makes an unnecessary provider request or removes the accepted-by-user warning provenance."
+    },
+    {
+      "id": "CAP-QUALITY-OPTIONAL-STATE",
+      "domain": "QUALITY",
+      "behavior": "Degrade malformed optional quality candidates without making the whole session unreadable.",
+      "anchors": [
+        "docs/dev/QUALITY_GUARD.md",
+        "src/core/quality"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Load optional-quality-state; pending decision disappears while history and applicable warnings remain available.",
+      "negativeCase": "Malformed optional candidate state makes the whole transcript unreadable instead of clearing only that pending decision."
+    },
+    {
+      "id": "CAP-QUALITY-JUDGE",
+      "domain": "QUALITY",
+      "behavior": "Keep Semantic Judge off by default, advisory in observe mode and explicitly confirmed before experimental rewrite.",
+      "anchors": [
+        "docs/dev/QUALITY_GUARD.md",
+        "src/core/quality"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "experimental",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Toggle modes with a finite fixture Judge; observe cannot block and rewrite cannot activate without confirmation.",
+      "negativeCase": "Observe mode blocks output or rewrite becomes enabled without its explicit confirmation."
+    },
+    {
+      "id": "CAP-QUALITY-BENCHMARK",
+      "domain": "QUALITY",
+      "behavior": "Preserve the developer-only bounded quality benchmark CLI and its evidence/recovery controls.",
+      "anchors": [
+        "docs/dev/QUALITY_GUARD.md",
+        "src/core/quality"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Run the offline preflight and a bounded existing-service lane when authorized; missing prerequisites remain skipped/unavailable, never passed.",
+      "negativeCase": "Missing prerequisites are counted as successful evaluations or requests exceed the declared benchmark budget."
+    },
+    {
+      "id": "CAP-STAGE-BOOTSTRAP",
+      "domain": "STAGE",
+      "behavior": "Freeze Module A/B inputs into the three-part Stage bootstrap with content identity and drift checks.",
+      "anchors": [
+        "docs/dev/STAGE.md",
+        "src/core/stage"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Open a Stage session from valid cards, restart, then alter a card; the frozen context is retained and drift is explicit.",
+      "negativeCase": "Restart re-reads changed cards as if they were the frozen original context or loses the deterministic opening."
+    },
+    {
+      "id": "CAP-STAGE-SURFACE",
+      "domain": "STAGE",
+      "behavior": "Keep Stage prose-first with no model tool/gate surface and its declared quality behavior.",
+      "anchors": [
+        "docs/dev/STAGE.md",
+        "src/core/stage"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Inspect Stage requests and rendered openings; no tool or undeclared gate is offered and formatting does not hide narrative content.",
+      "negativeCase": "Stage declares model tools/stop gates or formatting hides its narrative opening."
+    },
+    {
+      "id": "CAP-TITLE-DURABLE",
+      "domain": "TITLE",
+      "behavior": "Persist manual/automatic session titles as host-only facts independent of selected content branches.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session/title.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S2",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Rename and switch branches; title provenance survives and title metadata never enters provider conversation messages.",
+      "negativeCase": "Branch selection reverts a manual title or title metadata leaks into provider history."
+    },
+    {
+      "id": "CAP-TITLE-GENERATION",
+      "domain": "TITLE",
+      "behavior": "Bound automatic title claims, cooldown/retries and auxiliary usage; sessionTitle off prevents generation.",
+      "anchors": [
+        "docs/dev/SESSIONS.md",
+        "src/core/session/title.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S3",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Race title claims and restart; at most the permitted work executes and disabled titles produce zero helper calls.",
+      "negativeCase": "Concurrent claims duplicate title requests, retry/cooldown bounds are ignored or off still calls the helper model."
+    },
+    {
+      "id": "CAP-CHAT-STREAM",
+      "domain": "CHAT",
+      "behavior": "Render streaming Markdown, reasoning and usage while preserving input and selection/copy behavior.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Stream multibyte prose and strict double-tilde samples while typing/scrolling; output completion does not lose mounted content or input.",
+      "negativeCase": "Streaming updates erase a mounted completed block, current selection or the user's draft."
+    },
+    {
+      "id": "CAP-CHAT-COMPOSER",
+      "domain": "CHAT",
+      "behavior": "Support multiline input, text/image paste, queued edits and focus-aware key dispatch.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Exercise the keyboard-context matrix with normal and busy turns; text stays intact and unsupported images fail explicitly.",
+      "negativeCase": "A busy input is lost/duplicated or a cursor edit splits an extended grapheme."
+    },
+    {
+      "id": "CAP-CHAT-LAYOUT",
+      "domain": "CHAT",
+      "behavior": "Keep Chat operational at 80 columns with themes, reduced motion, branding and terminal restoration.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Resize narrow terminals and exit; controls remain usable and cursor/title/terminal state is restored.",
+      "negativeCase": "At80columns a required control becomes unreachable or shutdown leaves raw cursor/title state behind."
+    },
+    {
+      "id": "CAP-COMMAND-COMPLETION",
+      "domain": "COMMAND",
+      "behavior": "Complete slash commands and constrained arguments from the active runtime context without creating sessions.",
+      "anchors": [
+        "docs/dev/COMMAND_QUEUE.md",
+        "src/tui/commands"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Open model/Skill/session completion after catalog drift; only valid current choices are offered and free text remains editable.",
+      "negativeCase": "A stale model/Skill choice is offered as current or a free-text argument is captured by completion."
+    },
+    {
+      "id": "CAP-COMMAND-QUEUE",
+      "domain": "COMMAND",
+      "behavior": "Apply per-command immediate/tool-round/agent-loop busy policy with FIFO and modal pauses.",
+      "anchors": [
+        "docs/dev/COMMAND_QUEUE.md",
+        "src/tui/commands"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Queue mixed messages/commands during tools; no item is skipped or duplicated and session switches clear the prior queue.",
+      "negativeCase": "An item is skipped/duplicated across a tool boundary or a prior session's queued command survives a session switch."
+    },
+    {
+      "id": "CAP-COMMAND-ESC-TAKEOVER",
+      "domain": "COMMAND",
+      "behavior": "Interrupt and conditionally submit a captured queue head once, preserving newer queue edits.",
+      "anchors": [
+        "docs/dev/COMMAND_QUEUE.md",
+        "src/tui/commands"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Change the queue while cancellation rebuilds state; only an unchanged captured head may be submitted.",
+      "negativeCase": "Cancellation submits a queue head that the user edited/replaced during the interruption."
+    },
+    {
+      "id": "CAP-COMMAND-SIDE-QUESTION",
+      "domain": "COMMAND",
+      "behavior": "Ask tool-free /btw questions against frozen context without mutating parent durable history or stopping its turn.",
+      "anchors": [
+        "docs/dev/COMMAND_QUEUE.md",
+        "src/tui/commands"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Open/cancel/switch/copy side answers during a tool round; only complete frozen context is referenced and restart forgets side questions.",
+      "negativeCase": "A side request sees a half-written tool round or its response mutates the parent's durable conversation."
+    },
+    {
+      "id": "CAP-PANEL-ARBITRATION",
+      "domain": "PANEL",
+      "behavior": "Give active pickers/decisions the documented bottom surface while keeping global page switching available.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui/reading"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Switch Chat/Workspace with each modal; decision panels become pending strips where required and drafts survive.",
+      "negativeCase": "A bottom modal blocks Ctrl+O or a Workspace pending decision steals typing from its focus region."
+    },
+    {
+      "id": "CAP-PANEL-READING",
+      "domain": "PANEL",
+      "behavior": "Expand read-only details with shared scroll/resize anchors and preserve option/note/cursor state on return.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui/reading"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Read long and short panels, scroll with keys/wheel and resize; closing reading never submits or rejects an option.",
+      "negativeCase": "Closing read-only details submits/rejects an option or loses its note/cursor/scroll position."
+    },
+    {
+      "id": "CAP-PANEL-DECISIONS",
+      "domain": "PANEL",
+      "behavior": "Submit selected gate/question/permission/quality choices with the documented note and rejection behavior.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui/reading"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Exercise every decision surface and focus zone; Allow receives no rejection note and Escape follows the appropriate context.",
+      "negativeCase": "Allow includes a rejection note or Escape submits rather than following the current decision-zone rule."
+    },
+    {
+      "id": "CAP-WORKSPACE-TREE",
+      "domain": "WORKSPACE",
+      "behavior": "Browse lazy project trees, hidden-file toggles, quick-open and metadata-only unsafe/special entries.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui/workspace"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Navigate a mixed tree with links/binary/large files; selection and visibility follow the keyboard/context matrix without reading escaped targets.",
+      "negativeCase": "Traversing a metadata-only symlink reads outside the project or a printable tree shortcut edits the composer."
+    },
+    {
+      "id": "CAP-WORKSPACE-VIEWER",
+      "domain": "WORKSPACE",
+      "behavior": "Preview bounded source, Markdown and image metadata with correct read-only/editable modes.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui/workspace"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Open small/large/linked/unwritable files; only eligible content enters an editable buffer and preview/source switching remains meaningful.",
+      "negativeCase": "An oversized/read-only/symlink entry enters editable mode or preview/source switching misrepresents its state."
+    },
+    {
+      "id": "CAP-WORKSPACE-EDITOR",
+      "domain": "WORKSPACE",
+      "behavior": "Maintain independent bounded buffers, undo/redo, find/goto, atomic save/save-as and dirty LRU protection.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui/workspace"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Edit multiple files, exceed eight-buffer pressure and save; dirty buffers are protected and writes preserve the correct file identity.",
+      "negativeCase": "LRU pressure evicts a dirty buffer or save writes to a stale/rekeyed file identity."
+    },
+    {
+      "id": "CAP-WORKSPACE-DISK-CONFLICT",
+      "domain": "WORKSPACE",
+      "behavior": "Detect external changes by mtime/inode identity and require an explicit overwrite/reload choice.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui/workspace"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Replace or change an open file externally; stale content is marked and no silent overwrite occurs.",
+      "negativeCase": "An external edit is silently overwritten without the documented conflict choice."
+    },
+    {
+      "id": "CAP-WORKSPACE-VALIDATION",
+      "domain": "WORKSPACE",
+      "behavior": "Bind current/stale validation results and anchors to the selected/open file rather than a global last result.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui/workspace"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Validate one file, select another and edit/undo/save; status, findings and jump behavior remain attached to the correct artifact.",
+      "negativeCase": "Changing selection shows another file's findings or a dirty buffer retains a green current verdict."
+    },
+    {
+      "id": "CAP-WORKSPACE-OPS-MANAGEMENT",
+      "domain": "WORKSPACE-OPS",
+      "behavior": "Create, rename, copy and trash project files through guarded paths and explicit destructive/overwrite decisions.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui/workspace/file-operation-owner.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Operate on nested files and dirty buffers; buffer rekeys preserve edits, deleted files enter trash and outside paths are rejected.",
+      "negativeCase": "Trash permanently deletes content, buffer rekey loses dirty edits or a file operation escapes the project."
+    },
+    {
+      "id": "CAP-WORKSPACE-OPS-EXTERNAL-EDITOR",
+      "domain": "WORKSPACE-OPS",
+      "behavior": "Suspend and resume the TUI around a parsed external-editor argv without shell expansion or dirty-buffer loss.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui/workspace/file-operation-owner.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Invoke success/failure/missing editors and change/delete the file; terminal restoration and buffer refresh reflect the actual outcome.",
+      "negativeCase": "A dirty buffer is handed off or editor failure leaves the terminal suspended/unrestored."
+    },
+    {
+      "id": "CAP-WORKSPACE-OPS-REVISION",
+      "domain": "WORKSPACE-OPS",
+      "behavior": "Open artifacts and start explicit revision prompts only when the command requests model work.",
+      "anchors": [
+        "docs/dev/TUI.md",
+        "src/tui/workspace/file-operation-owner.ts"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Inspect/validate/switch artifacts without provider calls; an explicit revision prompt is the only path that generates new content.",
+      "negativeCase": "Artifact inspection/validation unexpectedly calls a provider without an explicit revision prompt."
+    },
+    {
+      "id": "CAP-SETUP-GUIDED",
+      "domain": "SETUP",
+      "behavior": "Guide provider/model/permission and optional MCP/Tavily setup without destroying an existing configuration.",
+      "anchors": [
+        "docs/dev/SETUP.md",
+        "src/setup"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Use existing and new registries with discovery success/failure; validated configuration remains recoverable and the chosen project launches once.",
+      "negativeCase": "Cancelled/failed setup corrupts existing configuration or launches the selected project more than once."
+    },
+    {
+      "id": "CAP-SETUP-THEME-PLATFORM",
+      "domain": "SETUP",
+      "behavior": "Apply process-scoped theme and native terminal/input behavior to Guided Setup across supported platforms.",
+      "anchors": [
+        "docs/dev/SETUP.md",
+        "src/setup"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S4",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Start setup with dark/light and cancel/retry steps; focus and edits persist without affecting unrelated host defaults.",
+      "negativeCase": "Setup navigation loses entered values or a process-only theme selection changes unrelated persistent defaults."
+    },
+    {
+      "id": "CAP-DIST-NPM",
+      "domain": "DIST",
+      "behavior": "Install the npm channel globally or through a local lockfile and expose the vesicle command with the complete runtime asset layout.",
+      "anchors": [
+        "docs/dev/WORKFLOW.md",
+        "scripts/build"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S5",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Smoke each platform/channel matrix row when its environment exists; no source checkout dependency or private runtime state enters the tarball.",
+      "negativeCase": "Installed commands rely on source checkout cwd or the tarball includes private runtime state."
+    },
+    {
+      "id": "CAP-DIST-LINUX",
+      "domain": "DIST",
+      "behavior": "Build and run the standalone Linux x64 release with sibling assets from an empty external project.",
+      "anchors": [
+        "docs/dev/WORKFLOW.md",
+        "scripts/build"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S5",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Run diagnostics, materialization and TUI from the release shape; no external Bun runtime is required.",
+      "negativeCase": "The standalone release needs an external Bun installation or fails to locate sibling assets from an empty project."
+    },
+    {
+      "id": "CAP-DIST-WINDOWS",
+      "domain": "DIST",
+      "behavior": "Build and run the native Windows x64 standalone program with functional rendering, packaged assets and branded resources.",
+      "anchors": [
+        "docs/dev/WORKFLOW.md",
+        "scripts/build"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S5",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Use native Windows execution for startup/rendering/assets/exit and branded-resource checks; cross-build diagnostics never substitute for native evidence.",
+      "negativeCase": "Cross-build/WSL output is substituted for a failing native Windows startup/rendering/artifact test."
+    },
+    {
+      "id": "CAP-DIST-INSTALLER",
+      "domain": "DIST",
+      "behavior": "Install, repair, upgrade and uninstall per-user Windows releases with exact PATH/Explorer ownership and data preservation.",
+      "anchors": [
+        "docs/dev/WORKFLOW.md",
+        "scripts/build"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S5",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Exercise clean/upgrade/repair/uninstall states; remove only owned integration and retain user configuration and project data.",
+      "negativeCase": "Repair/uninstall removes unrelated PATH entries or deletes retained user credentials/project data."
+    },
+    {
+      "id": "CAP-DIST-PUBLICATION",
+      "domain": "DIST",
+      "behavior": "Keep versioned assets/checksums, unsigned disclosure and explicit annotated-main-tag publication gates.",
+      "anchors": [
+        "docs/dev/WORKFLOW.md",
+        "scripts/build"
+      ],
+      "introducedAt": "present in the initial TS preservation snapshot 12dd7b6241d55cc462d949f5221ebabfe502984c",
+      "tsStatus": "implemented",
+      "targetStage": "S5",
+      "conditions": [
+        "Applicable supported platform/channel/profile conditions remain explicit in the catalogue matrices."
+      ],
+      "exercise": "Validate package/release metadata without publishing; malformed tags, wrong versions and failed required gates refuse release.",
+      "negativeCase": "A lightweight/wrong-version/non-main tag or failed gate reaches the publication action."
+    }
+  ]
+}

@@ -1,0 +1,1060 @@
+{
+  "schemaVersion": 1,
+  "sourceBaseline": "2bc4f9075214f72d7f930dd0dba173f1768afc2c",
+  "recordEnvelope": {
+    "requiredFields": [
+      "uuid",
+      "parentUuid",
+      "ts",
+      "sessionId",
+      "role",
+      "content"
+    ],
+    "roles": [
+      "user",
+      "assistant",
+      "system",
+      "tool"
+    ],
+    "optionalFields": [
+      "metadata"
+    ],
+    "legacy": "Missing UUID/parent links synthesize a deterministic linear chain; cycles/missing parents fail branch projection."
+  },
+  "untaggedRecords": [
+    {
+      "role": "system",
+      "purpose": "Initial identity header with composed prompt content, Engine/profile/tools/gates/validators, assets/Harness identity, instructions and optional Skill catalog. Stage adds frozen bootstrap/card identity."
+    },
+    {
+      "role": "user",
+      "purpose": "Authored prompt, images by reference, selected provider/model and logical-turn identity."
+    },
+    {
+      "role": "assistant",
+      "purpose": "Content, exact toolCalls, provider-state/thinking/reasoning/search/usage and logical/provider-round identity."
+    },
+    {
+      "role": "tool",
+      "purpose": "Paired toolCallId/name/ok/result with file/web/MCP/process/instruction/Skill events and reference-only images."
+    }
+  ],
+  "recordKinds": [
+    {
+      "id": "RECORD-provider-switch",
+      "kind": "provider-switch",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Project latest Host preferences from physical order, independently of chosen conversation branch.",
+      "capabilityIds": [
+        "CAP-SESSION-HOST-STATE"
+      ],
+      "source": "src/tui/session-preferences-controller.ts",
+      "sourceHash": "d7426d29f0da69e725385f65f93d49ffd5f2b193b3e63158fc6fac5c4d897536",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-thinking-switch",
+      "kind": "thinking-switch",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Project latest Host preferences from physical order, independently of chosen conversation branch.",
+      "capabilityIds": [
+        "CAP-SESSION-HOST-STATE"
+      ],
+      "source": "src/tui/session-preferences-controller.ts",
+      "sourceHash": "d7426d29f0da69e725385f65f93d49ffd5f2b193b3e63158fc6fac5c4d897536",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-reasoning-switch",
+      "kind": "reasoning-switch",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Project latest Host preferences from physical order, independently of chosen conversation branch.",
+      "capabilityIds": [
+        "CAP-SESSION-HOST-STATE"
+      ],
+      "source": "src/tui/session-preferences-controller.ts",
+      "sourceHash": "d7426d29f0da69e725385f65f93d49ffd5f2b193b3e63158fc6fac5c4d897536",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-permission-mode-switch",
+      "kind": "permission-mode-switch",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Project latest Host preferences from physical order, independently of chosen conversation branch.",
+      "capabilityIds": [
+        "CAP-SESSION-HOST-STATE"
+      ],
+      "source": "src/tui/session-preferences-controller.ts",
+      "sourceHash": "d7426d29f0da69e725385f65f93d49ffd5f2b193b3e63158fc6fac5c4d897536",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-engine-switch",
+      "kind": "engine-switch",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Persist confirmed/manual Engine transition for future turns.",
+      "capabilityIds": [
+        "CAP-ENGINE-HANDOFF"
+      ],
+      "source": "src/core/agent-loop/engine-switch-continuation.ts",
+      "sourceHash": "fbaccc6e6d2b33658d223d81d56382a6729156d5339f4bf27b134e8c1456f997",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-engine-handoff",
+      "kind": "engine-handoff",
+      "roles": [
+        "user"
+      ],
+      "behavior": "Carry explicit handoff context, preserving full or requested summary policy.",
+      "capabilityIds": [
+        "CAP-ENGINE-HANDOFF"
+      ],
+      "source": "src/tui/session-preferences-controller.ts",
+      "sourceHash": "d7426d29f0da69e725385f65f93d49ffd5f2b193b3e63158fc6fac5c4d897536",
+      "providerProjection": "user context",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-failed-turn",
+      "kind": "failed-turn",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Remove only failed trailing inputs from provider projection; retain physical records and completed compact boundary.",
+      "capabilityIds": [
+        "CAP-LOOP-FAILURE"
+      ],
+      "source": "src/core/session/history-projector.ts",
+      "sourceHash": "0c6a920459fa8e0fb6c484e1d25a239954636ccb3f33934af9349a2ca3082c72",
+      "providerProjection": "changes projection without adding a message",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-queued-user-message",
+      "kind": "queued-user-message",
+      "roles": [
+        "user"
+      ],
+      "behavior": "Preserve queued authored text admitted at a coherent tool/turn boundary.",
+      "capabilityIds": [
+        "CAP-COMMAND-QUEUE"
+      ],
+      "source": "src/core/agent-loop/turn-loop.ts",
+      "sourceHash": "d6e3f81f8cea2f7ec8dc301d35240e3076d7fd6b5d59046ea542a5935b958205",
+      "providerProjection": "user content",
+      "targetStage": "S4"
+    },
+    {
+      "id": "RECORD-no-progress-breaker",
+      "kind": "no-progress-breaker",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Persist bounded no-progress stop without inventing a successful assistant response.",
+      "capabilityIds": [
+        "CAP-LOOP-GUARDS"
+      ],
+      "source": "src/core/agent-loop/turn-loop.ts",
+      "sourceHash": "d6e3f81f8cea2f7ec8dc301d35240e3076d7fd6b5d59046ea542a5935b958205",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-validation",
+      "kind": "validation",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Record advisory artifact-shaped validation outcome without aborting ordinary turns.",
+      "capabilityIds": [
+        "CAP-LOOP-DURABILITY"
+      ],
+      "source": "src/core/agent-loop/turn-finalizer.ts",
+      "sourceHash": "fdeabccc91a9e1d1b032065449463500d0740b33ca9245d26541fe09296ad805",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-permission-request",
+      "kind": "permission-request",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Bind pending/resolved permission to exact tool call and retain decision before execution/continuation.",
+      "capabilityIds": [
+        "CAP-PERMISSION-BINDING"
+      ],
+      "source": "src/core/agent-loop/permission-continuation.ts",
+      "sourceHash": "d8667fa48ce24565edee5f216a6ca071ff2b6cfadc86c74015c148e9a0afbea5",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-permission-resolution",
+      "kind": "permission-resolution",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Bind pending/resolved permission to exact tool call and retain decision before execution/continuation.",
+      "capabilityIds": [
+        "CAP-PERMISSION-BINDING"
+      ],
+      "source": "src/core/agent-loop/permission-continuation.ts",
+      "sourceHash": "d8667fa48ce24565edee5f216a6ca071ff2b6cfadc86c74015c148e9a0afbea5",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-process-started",
+      "kind": "process-started",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Record approved process start before side effects; missing completion recovers indeterminate without replay.",
+      "capabilityIds": [
+        "CAP-SESSION-REPLAY-PAIRING"
+      ],
+      "source": "src/core/agent-loop/tool-round-executor.ts",
+      "sourceHash": "97e31b348c40c3f4697e79b1f31d04fa2f9b3278f1a15148e5d3694b40f1b125",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-background-process-completed",
+      "kind": "background-process-completed",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Update persisted background process card/completion status.",
+      "capabilityIds": [
+        "CAP-PROCESS-BACKGROUND"
+      ],
+      "source": "src/core/agent-loop/background-process.ts",
+      "sourceHash": "986fa96ee1c7b31be443a0de48949e6981fcd5742ecec947e71413cb2a96d977",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-background-process-results",
+      "kind": "background-process-results",
+      "roles": [
+        "system",
+        "user"
+      ],
+      "behavior": "Persist untrusted process completion envelope; legacy user-role records remain supported.",
+      "capabilityIds": [
+        "CAP-PROCESS-BACKGROUND"
+      ],
+      "source": "src/core/agent-loop/provider-round.ts",
+      "sourceHash": "97a2efcaf346cbce5f28bb1284182056b9fdcbc5e7c99f54fa529b7f39c3ecb5",
+      "providerProjection": "provider user packet carrying the exact escaped host-notification envelope",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-gate-resolution",
+      "kind": "gate-resolution",
+      "roles": [
+        "tool",
+        "user"
+      ],
+      "behavior": "Persist exact gate tool result and separate authored decision follow-up before continuing.",
+      "capabilityIds": [
+        "CAP-INTERACTION-GATE"
+      ],
+      "source": "src/core/agent-loop/gate-continuation.ts",
+      "sourceHash": "1b16e496887112a0d855448832c10affec899d448ce9f90c6dd6ea9a41609266",
+      "providerProjection": "paired tool result and user follow-up",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-model",
+      "kind": "model",
+      "roles": [
+        "tool"
+      ],
+      "behavior": "Question resolution optionally tags chosen answer kind and retains selectedIndex/label/freeform and toolCallId.",
+      "capabilityIds": [
+        "CAP-INTERACTION-QUESTION"
+      ],
+      "source": "src/core/agent-loop/user-question-continuation.ts",
+      "sourceHash": "0aead467e5edbb5db27269049d14ee87e949bc22abfed86b13fa9399989f317e",
+      "providerProjection": "paired tool result",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-skip",
+      "kind": "skip",
+      "roles": [
+        "tool"
+      ],
+      "behavior": "Question resolution optionally tags chosen answer kind and retains selectedIndex/label/freeform and toolCallId.",
+      "capabilityIds": [
+        "CAP-INTERACTION-QUESTION"
+      ],
+      "source": "src/core/agent-loop/user-question-continuation.ts",
+      "sourceHash": "0aead467e5edbb5db27269049d14ee87e949bc22abfed86b13fa9399989f317e",
+      "providerProjection": "paired tool result",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-freeform",
+      "kind": "freeform",
+      "roles": [
+        "tool"
+      ],
+      "behavior": "Question resolution optionally tags chosen answer kind and retains selectedIndex/label/freeform and toolCallId.",
+      "capabilityIds": [
+        "CAP-INTERACTION-QUESTION"
+      ],
+      "source": "src/core/agent-loop/user-question-continuation.ts",
+      "sourceHash": "0aead467e5edbb5db27269049d14ee87e949bc22abfed86b13fa9399989f317e",
+      "providerProjection": "paired tool result",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-user-question-answer",
+      "kind": "user-question-answer",
+      "roles": [
+        "user"
+      ],
+      "behavior": "Record the question follow-up with selected answer provenance.",
+      "capabilityIds": [
+        "CAP-INTERACTION-QUESTION"
+      ],
+      "source": "src/core/agent-loop/user-question-continuation.ts",
+      "sourceHash": "0aead467e5edbb5db27269049d14ee87e949bc22abfed86b13fa9399989f317e",
+      "providerProjection": "user follow-up",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-delegation-decision-point",
+      "kind": "delegation-decision-point",
+      "roles": [
+        "assistant"
+      ],
+      "behavior": "Retain the failed-delegation choice and exact attempt identity for recovery.",
+      "capabilityIds": [
+        "CAP-INTERACTION-RESTORE"
+      ],
+      "source": "src/core/agent-loop/delegation-decision.ts",
+      "sourceHash": "d45273a5003dc0dac2436931a8d437ca064cc71eb931618d2c8e23726af57374",
+      "providerProjection": "assistant ask_user_question call with durable decision identity",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-delegation-retry-intent",
+      "kind": "delegation-retry-intent",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Record retry intent/user retry before child work or parent continuation.",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ],
+      "source": "src/core/agent-loop/user-question-continuation.ts",
+      "sourceHash": "0aead467e5edbb5db27269049d14ee87e949bc22abfed86b13fa9399989f317e",
+      "providerProjection": "host-only",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-delegation-user-retry",
+      "kind": "delegation-user-retry",
+      "roles": [
+        "assistant"
+      ],
+      "behavior": "Record retry intent/user retry before child work or parent continuation.",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ],
+      "source": "src/core/agent-loop/user-question-continuation.ts",
+      "sourceHash": "0aead467e5edbb5db27269049d14ee87e949bc22abfed86b13fa9399989f317e",
+      "providerProjection": "assistant retry spawn call bound to authorized intent",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-delegation-decision-resolution",
+      "kind": "delegation-decision-resolution",
+      "roles": [
+        "tool"
+      ],
+      "behavior": "Bind delegated retry/skip answer to interaction, failed run and option identities.",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ],
+      "source": "src/core/agent-loop/user-question-continuation.ts",
+      "sourceHash": "0aead467e5edbb5db27269049d14ee87e949bc22abfed86b13fa9399989f317e",
+      "providerProjection": "paired tool result",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-delegation-decision-answer",
+      "kind": "delegation-decision-answer",
+      "roles": [
+        "user"
+      ],
+      "behavior": "Carry delegated-decision follow-up into the resumed provider turn.",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ],
+      "source": "src/core/agent-loop/user-question-continuation.ts",
+      "sourceHash": "0aead467e5edbb5db27269049d14ee87e949bc22abfed86b13fa9399989f317e",
+      "providerProjection": "user follow-up",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-subagent-session",
+      "kind": "subagent-session",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Retain child ownership separately from intra-session parentUuid, with inherited bounded context and profile metadata.",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ],
+      "source": "src/core/agents/child-bootstrap.ts",
+      "sourceHash": "70affa53bf1bff96cdc4cc37bb8ad06d3890c02d843feacbb30f56a9d6897e60",
+      "providerProjection": "host-only",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-subagent-task",
+      "kind": "subagent-task",
+      "roles": [
+        "user"
+      ],
+      "behavior": "Persist the initial child task after child identity.",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ],
+      "source": "src/core/agents/child-bootstrap.ts",
+      "sourceHash": "70affa53bf1bff96cdc4cc37bb8ad06d3890c02d843feacbb30f56a9d6897e60",
+      "providerProjection": "child user context",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-subagent-parent-message",
+      "kind": "subagent-parent-message",
+      "roles": [
+        "user"
+      ],
+      "behavior": "Persist parent-to-child delivery before processing it.",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ],
+      "source": "src/core/agents/child-run-durability.ts",
+      "sourceHash": "60444efed80d55c302eb8eb8b47d8d14646281122e24b99cc4036a1bd6c8a776",
+      "providerProjection": "child user context",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-subagent-response",
+      "kind": "subagent-response",
+      "roles": [
+        "assistant"
+      ],
+      "behavior": "Retain child assistant content, usage, calls and provider state.",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ],
+      "source": "src/core/agents/child-run-durability.ts",
+      "sourceHash": "60444efed80d55c302eb8eb8b47d8d14646281122e24b99cc4036a1bd6c8a776",
+      "providerProjection": "child assistant response",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-subagent-tool-result",
+      "kind": "subagent-tool-result",
+      "roles": [
+        "tool"
+      ],
+      "behavior": "Retain child result paired to its originating call.",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ],
+      "source": "src/core/agents/child-run-durability.ts",
+      "sourceHash": "60444efed80d55c302eb8eb8b47d8d14646281122e24b99cc4036a1bd6c8a776",
+      "providerProjection": "child tool result",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-subagent-result",
+      "kind": "subagent-result",
+      "roles": [
+        "tool"
+      ],
+      "behavior": "Persist foreground/recovered result, background spawn acceptance, or wait_agent result; pair with the actual originating tool call, which need not be spawn_agent.",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ],
+      "source": "src/core/agents/store.ts",
+      "sourceHash": "d87ff6e92165996c3231a522055e4bf67d01a4d30a2a76ef16c0a9d141fb3077",
+      "providerProjection": "parent paired tool result",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-compact-boundary",
+      "kind": "compact-boundary",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Retain manual compact boundary metadata without deleting old branch.",
+      "capabilityIds": [
+        "CAP-COMPACT-PORTABLE"
+      ],
+      "source": "src/core/compact/service.ts",
+      "sourceHash": "c5c75fcd16e24365ea2147b27599fb2105da8ee6eb69176879cfcb825e3a21be",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-compact-summary",
+      "kind": "compact-summary",
+      "roles": [
+        "user"
+      ],
+      "behavior": "Retain portable summary as completed-operation boundary.",
+      "capabilityIds": [
+        "CAP-COMPACT-PORTABLE"
+      ],
+      "source": "src/core/compact/service.ts",
+      "sourceHash": "c5c75fcd16e24365ea2147b27599fb2105da8ee6eb69176879cfcb825e3a21be",
+      "providerProjection": "portable user summary",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-compact-checkpoint-v1",
+      "kind": "compact-checkpoint-v1",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Validate versioned replacement history and optional native projection; malformed required format fails.",
+      "capabilityIds": [
+        "CAP-COMPACT-PORTABLE"
+      ],
+      "source": "src/core/session/compact-checkpoint.ts",
+      "sourceHash": "ed6ab37177d3082d64cdcec7f65b3c195ba1bd6414b51f6ebf4bcf1b57288515",
+      "providerProjection": "replace projection, then replay suffix; exact native-owner rules apply",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-compact-blocked",
+      "kind": "compact-blocked",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Record a compact/context boundary that could not safely proceed.",
+      "capabilityIds": [
+        "CAP-COMPACT-AUTO-BUDGET"
+      ],
+      "source": "src/core/agent-loop/mid-turn-compaction.ts",
+      "sourceHash": "c9fb4169faf4f39bf0c459aa350f63234e462a8e79fc1d67130ee1e29d733f57",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-file-history-snapshot",
+      "kind": "file-history-snapshot",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Preserve pre-mutation path states, absence, directory topology, modes, backup hashes and host-process taint.",
+      "capabilityIds": [
+        "CAP-REWIND-CHECKPOINTS"
+      ],
+      "source": "src/core/checkpoints/file-history.ts",
+      "sourceHash": "3cd019a84b268b35f6326e97fe252aab1071dbb969c15097e8a26589dcffde79",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-candidate-selection",
+      "kind": "candidate-selection",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Append owning-fork/selected-leaf pointer; remains transparent to provider messages and pending interaction recovery.",
+      "capabilityIds": [
+        "CAP-CANDIDATE-TREE"
+      ],
+      "source": "src/core/session/selection.ts",
+      "sourceHash": "fd09e89df5b8c141e31fb0d4dc6280a8a35dd933b00ad616a20093d97ae5c9dd",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-candidate-file-state",
+      "kind": "candidate-file-state",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Retain version-2 full post-state manifest using content-addressed backups; legacy semantics remain explicit.",
+      "capabilityIds": [
+        "CAP-CANDIDATE-FILE-RESTORE"
+      ],
+      "source": "src/core/checkpoints/candidate-files.ts",
+      "sourceHash": "6d14b44a20a0b16a609178342d2248cc7ddb5c926be6246e8f90d314331c5285",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-candidate-file-degraded",
+      "kind": "candidate-file-degraded",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Persist whether candidate restoration is degraded or recovered, keeping failures observable.",
+      "capabilityIds": [
+        "CAP-CANDIDATE-RECOVERY"
+      ],
+      "source": "src/core/checkpoints/candidate-files.ts",
+      "sourceHash": "6d14b44a20a0b16a609178342d2248cc7ddb5c926be6246e8f90d314331c5285",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-candidate-file-restored",
+      "kind": "candidate-file-restored",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Persist whether candidate restoration is degraded or recovered, keeping failures observable.",
+      "capabilityIds": [
+        "CAP-CANDIDATE-RECOVERY"
+      ],
+      "source": "src/core/checkpoints/candidate-files.ts",
+      "sourceHash": "6d14b44a20a0b16a609178342d2248cc7ddb5c926be6246e8f90d314331c5285",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-session-archive",
+      "kind": "session-archive",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Archive old bytes and append confirmed new Harness/assets/Skill identity; retain durable migration notice.",
+      "capabilityIds": [
+        "CAP-MIGRATION-ARCHIVE"
+      ],
+      "source": "src/core/session/session-migration.ts",
+      "sourceHash": "3f08e4e5453390591032ece998f2e8e3e08938845f582c628424024faa067a0c",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-session-migration",
+      "kind": "session-migration",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Archive old bytes and append confirmed new Harness/assets/Skill identity; retain durable migration notice.",
+      "capabilityIds": [
+        "CAP-MIGRATION-ARCHIVE"
+      ],
+      "source": "src/core/session/session-migration.ts",
+      "sourceHash": "3f08e4e5453390591032ece998f2e8e3e08938845f582c628424024faa067a0c",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-skill-catalog",
+      "kind": "skill-catalog",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Explicit catalog snapshot/re-freeze survives branch selection through physical-order Host projection.",
+      "capabilityIds": [
+        "CAP-SKILL-FREEZE"
+      ],
+      "source": "src/core/skills/catalog-refresh.ts",
+      "sourceHash": "8a243732a217bc7cdab1ac26c1c2bfa91781b4f7854673636d3e511668eff55f",
+      "providerProjection": "host-only",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-skill-activation",
+      "kind": "skill-activation",
+      "roles": [
+        "user"
+      ],
+      "behavior": "Retain activated Skill context with name/hash and activation identity; reattach after compact when available.",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION"
+      ],
+      "source": "src/core/skills/host-activation.ts",
+      "sourceHash": "bce32f228209c639d8b5d6895e038c058714ea62022777e52b29ad030c62ffb2",
+      "providerProjection": "bounded user context",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-skill-context-lost",
+      "kind": "skill-context-lost",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Explain unavailable Skill context after compact without silently substituting changed instructions.",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION"
+      ],
+      "source": "src/core/compact/service.ts",
+      "sourceHash": "c5c75fcd16e24365ea2147b27599fb2105da8ee6eb69176879cfcb825e3a21be",
+      "providerProjection": "host-only",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-session-title",
+      "kind": "session-title",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Retain title/source, generation claims/cooldown/attempts and auxiliary usage; manual title wins and branch changes do not revert it.",
+      "capabilityIds": [
+        "CAP-TITLE-DURABLE"
+      ],
+      "source": "src/core/session/title.ts",
+      "sourceHash": "0eefbd6c53b6c2de1dc44532df523d18e432d48085ebc796fdc546457c3a06f1",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-session-title-generation",
+      "kind": "session-title-generation",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Retain title/source, generation claims/cooldown/attempts and auxiliary usage; manual title wins and branch changes do not revert it.",
+      "capabilityIds": [
+        "CAP-TITLE-DURABLE"
+      ],
+      "source": "src/core/session/title.ts",
+      "sourceHash": "0eefbd6c53b6c2de1dc44532df523d18e432d48085ebc796fdc546457c3a06f1",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-session-title-usage",
+      "kind": "session-title-usage",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Retain title/source, generation claims/cooldown/attempts and auxiliary usage; manual title wins and branch changes do not revert it.",
+      "capabilityIds": [
+        "CAP-TITLE-DURABLE"
+      ],
+      "source": "src/core/session/title.ts",
+      "sourceHash": "0eefbd6c53b6c2de1dc44532df523d18e432d48085ebc796fdc546457c3a06f1",
+      "providerProjection": "host-only",
+      "targetStage": "S2"
+    },
+    {
+      "id": "RECORD-stage-bootstrap-opening",
+      "kind": "stage-bootstrap-opening",
+      "roles": [
+        "assistant"
+      ],
+      "behavior": "Persist deterministic rendered opening after frozen Stage header/card context.",
+      "capabilityIds": [
+        "CAP-STAGE-BOOTSTRAP"
+      ],
+      "source": "src/core/stage/bootstrap.ts",
+      "sourceHash": "a3b6889ee8159f409fa03a87eb0992695aa1c698aa32f3a35e038e77a56a4741",
+      "providerProjection": "assistant opening",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-quality-event",
+      "kind": "quality-event",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Retain detector/policy outcome and target assessments as Host audit data.",
+      "capabilityIds": [
+        "CAP-QUALITY-DETECTOR"
+      ],
+      "source": "src/core/quality/guard.ts",
+      "sourceHash": "b229686538504ec3b0b2fdaf08e934a2f1dcc93ac920bd642788e598c2a1037d",
+      "providerProjection": "host-only",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-quality-check-pending",
+      "kind": "quality-check-pending",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Retain pending checks, warning/decision candidates and rejected hashes; optional corrupted candidate state degrades locally.",
+      "capabilityIds": [
+        "CAP-QUALITY-OPTIONAL-STATE"
+      ],
+      "source": "src/core/agent-loop/quality-round-recording.ts",
+      "sourceHash": "60543216b6a4a7dc95ace8df2ebe7bbf82f57d3d333d7cb0ed0950ecc74e3251",
+      "providerProjection": "host-only",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-quality-warning",
+      "kind": "quality-warning",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Retain pending checks, warning/decision candidates and rejected hashes; optional corrupted candidate state degrades locally.",
+      "capabilityIds": [
+        "CAP-QUALITY-OPTIONAL-STATE"
+      ],
+      "source": "src/core/agent-loop/quality-round-recording.ts",
+      "sourceHash": "60543216b6a4a7dc95ace8df2ebe7bbf82f57d3d333d7cb0ed0950ecc74e3251",
+      "providerProjection": "host-only",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-quality-rejected-candidate",
+      "kind": "quality-rejected-candidate",
+      "roles": [
+        "assistant"
+      ],
+      "behavior": "Retain pending checks, warning/decision candidates and rejected hashes; optional corrupted candidate state degrades locally.",
+      "capabilityIds": [
+        "CAP-QUALITY-OPTIONAL-STATE"
+      ],
+      "source": "src/core/agent-loop/quality-round-recording.ts",
+      "sourceHash": "60543216b6a4a7dc95ace8df2ebe7bbf82f57d3d333d7cb0ed0950ecc74e3251",
+      "providerProjection": "assistant candidate/tool calls; initial rejection may withhold prose, but retry/stop settlement may retain candidate.content and the projector preserves it",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-quality-retry-intent",
+      "kind": "quality-retry-intent",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Persist retry/accept/stop settlement before subsequent work; accepted warnings keep accepted-by-user provenance.",
+      "capabilityIds": [
+        "CAP-QUALITY-DECISIONS"
+      ],
+      "source": "src/core/agent-loop/quality-decision-settlement.ts",
+      "sourceHash": "c8b2e4f7c68b613fea6d59a158e9b12a8b8a9a6a849e088b0dfa566c5ba80236",
+      "providerProjection": "host-only",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-quality-check-cleared",
+      "kind": "quality-check-cleared",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Persist retry/accept/stop settlement before subsequent work; accepted warnings keep accepted-by-user provenance.",
+      "capabilityIds": [
+        "CAP-QUALITY-DECISIONS"
+      ],
+      "source": "src/core/agent-loop/quality-decision-settlement.ts",
+      "sourceHash": "c8b2e4f7c68b613fea6d59a158e9b12a8b8a9a6a849e088b0dfa566c5ba80236",
+      "providerProjection": "host-only",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-quality-resolution",
+      "kind": "quality-resolution",
+      "roles": [
+        "system"
+      ],
+      "behavior": "Persist retry/accept/stop settlement before subsequent work; accepted warnings keep accepted-by-user provenance.",
+      "capabilityIds": [
+        "CAP-QUALITY-DECISIONS"
+      ],
+      "source": "src/core/agent-loop/quality-decision-settlement.ts",
+      "sourceHash": "c8b2e4f7c68b613fea6d59a158e9b12a8b8a9a6a849e088b0dfa566c5ba80236",
+      "providerProjection": "host-only",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-quality-rewrite-feedback",
+      "kind": "quality-rewrite-feedback",
+      "roles": [
+        "user",
+        "tool"
+      ],
+      "behavior": "Feed bounded rewrite feedback to subsequent provider request with candidate/warning identity.",
+      "capabilityIds": [
+        "CAP-QUALITY-REWRITE"
+      ],
+      "source": "src/core/agent-loop/quality-decision-settlement.ts",
+      "sourceHash": "c8b2e4f7c68b613fea6d59a158e9b12a8b8a9a6a849e088b0dfa566c5ba80236",
+      "providerProjection": "user feedback or paired failed interaction-tool result",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-quality-decision-deferred-tool",
+      "kind": "quality-decision-deferred-tool",
+      "roles": [
+        "tool"
+      ],
+      "behavior": "Resolve deferred/stopped calls with paired durable results, never execute merely to fill history.",
+      "capabilityIds": [
+        "CAP-QUALITY-DECISIONS"
+      ],
+      "source": "src/core/agent-loop/quality-decision-settlement.ts",
+      "sourceHash": "c8b2e4f7c68b613fea6d59a158e9b12a8b8a9a6a849e088b0dfa566c5ba80236",
+      "providerProjection": "paired failed tool result",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-quality-decision-stopped-tool",
+      "kind": "quality-decision-stopped-tool",
+      "roles": [
+        "tool"
+      ],
+      "behavior": "Resolve deferred/stopped calls with paired durable results, never execute merely to fill history.",
+      "capabilityIds": [
+        "CAP-QUALITY-DECISIONS"
+      ],
+      "source": "src/core/agent-loop/quality-decision-settlement.ts",
+      "sourceHash": "c8b2e4f7c68b613fea6d59a158e9b12a8b8a9a6a849e088b0dfa566c5ba80236",
+      "providerProjection": "paired failed tool result",
+      "targetStage": "S3"
+    },
+    {
+      "id": "RECORD-subagent-results",
+      "kind": "subagent-results",
+      "roles": [
+        "user"
+      ],
+      "behavior": "Persist batched background-child deliveries with inbox IDs before parent continuation; acknowledge only the consumed batch.",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ],
+      "source": "src/tui/turn-controller.ts",
+      "sourceHash": "b537b8bb96762235cf8accddfc05ed5a1dcdccc021997add7da98873e10fee4d",
+      "providerProjection": "bounded host-framed user packet",
+      "targetStage": "S3"
+    }
+  ],
+  "adjacentResources": [
+    {
+      "path": ".vesicle/sessions/<id>.jsonl",
+      "behavior": "Append-only physical record stream; preserve originals and inactive branches.",
+      "source": "src/core/session/append-store.ts",
+      "capabilityIds": [
+        "CAP-SESSION-APPEND"
+      ]
+    },
+    {
+      "path": ".vesicle/sessions/archive/",
+      "behavior": "Pre-migration transcript copies with provenance; never silently overwrite originals.",
+      "source": "src/core/session/session-migration.ts",
+      "capabilityIds": [
+        "CAP-MIGRATION-ARCHIVE"
+      ]
+    },
+    {
+      "path": ".vesicle/attachments/<sha>.<ext>",
+      "behavior": "Content-addressed images; metadata references MIME/size/hash/relative path, not base64; missing/corrupt files fail materialization.",
+      "source": "src/core/attachments/store.ts",
+      "capabilityIds": [
+        "CAP-ATTACHMENT-ADDRESSING"
+      ]
+    },
+    {
+      "path": ".vesicle/file-history/<session>/backups/",
+      "behavior": "Content-addressed file bodies used by rewind and candidate manifests; hash/path/topology safeguards apply.",
+      "source": "src/core/checkpoints/file-history.ts",
+      "capabilityIds": [
+        "CAP-REWIND-CHECKPOINTS"
+      ]
+    },
+    {
+      "path": ".vesicle/subagents/<runId>.json",
+      "behavior": "Durable child run state and terminal-delivery ownership.",
+      "source": "src/core/agents/store.ts",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ]
+    },
+    {
+      "path": ".vesicle/subagents/inbox/<hash>.jsonl",
+      "behavior": "Append-only child terminal-result delivery to the parent: enqueued/delivered/acknowledged transitions. Parent-to-child messages wait in memory and become durable child-session records only when consumed.",
+      "source": "src/core/agents/store.ts",
+      "capabilityIds": [
+        "CAP-AGENT-DURABILITY"
+      ]
+    },
+    {
+      "path": ".vesicle/processes/<taskId>.json",
+      "behavior": "Bounded process state/output, plan and exit metadata; restart cannot safely re-run an unknown completed side effect.",
+      "source": "src/core/process/manager.ts",
+      "capabilityIds": [
+        "CAP-PROCESS-BACKGROUND"
+      ]
+    },
+    {
+      "path": ".vesicle/trash/",
+      "behavior": "Workspace deleted-file recovery store; recover by explicit move, not conversation rewind.",
+      "source": "src/tui/workspace/controller.ts",
+      "capabilityIds": [
+        "CAP-WORKSPACE-OPS-MANAGEMENT"
+      ]
+    },
+    {
+      "path": "VESICLE.md and VESICLE.<engine>.md with instruction backup state",
+      "behavior": "Persistent instructions are configuration outside file rewind; preserve scope-specific previous content separately.",
+      "source": "src/core/instructions/store.ts",
+      "capabilityIds": [
+        "CAP-INSTRUCTION-MUTATION"
+      ]
+    }
+  ],
+  "projectionOnly": [
+    {
+      "kind": "process-indeterminate",
+      "source": "src/core/session/provider-history-repair.ts",
+      "reason": "Synthetic failed tool result for an approved process with no durable completion; does not replay execution."
+    },
+    {
+      "kind": "tool-interrupted",
+      "source": "src/core/session/provider-history-repair.ts",
+      "reason": "Synthetic pairing repair for a dangling tool call; not a newly executed result."
+    },
+    {
+      "kind": "provider-native-checkpoint",
+      "source": "src/core/session/history-projector.ts",
+      "reason": "In-memory projection of optional native compact state; durable authority is compact-checkpoint-v1."
+    }
+  ],
+  "nonDurableExample": {
+    "kind": "quality-judge",
+    "source": "src/core/quality/judge.ts",
+    "reason": "Provider request metadata, not a session record kind."
+  },
+  "corpus": "tests/fixtures/migration/corpus",
+  "remainingAcceptance": [
+    "Corpus reader checks do not prove all migration copy transactions. S2 must inject interruption, lock conflict, disk-write failure, missing attachment and concurrent old-process access and prove preservation/rollback.",
+    "Provider-state payloads/signatures are opaque and not normalized away.",
+    "Child sessions and adjacent stores must migrate coherently; no downgrade reader may silently discard required records."
+  ],
+  "nestedDurableKinds": [
+    {
+      "kind": "skill-activation-reattach",
+      "location": "compact checkpoint replacementMessages",
+      "source": "src/core/skills/compaction.ts",
+      "behavior": "Bounded Skill context reattached inside the persisted compact replacement; not a top-level session record and not merely transient state.",
+      "capabilityIds": [
+        "CAP-SKILL-ACTIVATION"
+      ]
+    }
+  ]
+}

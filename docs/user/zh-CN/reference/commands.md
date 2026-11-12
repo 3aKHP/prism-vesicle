@@ -155,7 +155,7 @@ findings 面板独占键盘:标题以 `findings: <路径> — <摘要>` 标明�
 **Ctrl+X**(Workspace 页任意焦点区:树/查看器/编辑器/输入框有打开文件时)挂起 Vesicle 的界面,把你正看/正编辑的文件交给你的真实编辑器处理,退出后自动恢复界面并按结果刷新。
 
 - **编辑器解析顺序**(与 git 一致,具体到通用):`$VESICLE_EDITOR` 环境变量 → 用户级 `settings.yaml` 的 `editor:` 字段 → `$VISUAL` → `$EDITOR` → 平台兜底(POSIX `vi`、Windows `notepad`)。命令行支持引号(`code --wait`、带空格的路径都能表达),不走 shell。
-- **`settings.yaml`** 是新增的用户级配置文件(与 `providers.yaml` 同目录,同样的 `key: value` 行格式,`version: 1`),目前只读 `editor` 字段,其余为后续设置项(如主题持久化)预留。
+- **`settings.yaml`** 是与 `providers.yaml` 同目录的用户级配置文件，使用 `key: value` 行格式，可选声明 `version: 1`。支持 `editor` 和 `sessionTitle: auto | off`；详见[配置参考](./configuration.md)。
 - **未保存的缓冲区会被拒绝**:状态行提示先 `Ctrl+S`,避免外部编辑器的写入静默覆盖你本地的改动。
 - **返回时**:打开的可编辑缓冲区按 mtime 判断——变了就重载(`replaceText`,保留撤销栈)并重新校验(等同一次保存);没变提示 `no changes`;被删除或换成符号链接则关闭;树里选中但未打开的文件只刷新目录缓存与索引。只读 / 图片 / 二进制文件也允许交接(能不能写进是编辑器自己的事)。
 - 编辑器命令不存在(ENOENT)→ 状态行 error 显示解析到的命令;非零退出 → warn,照常刷新。

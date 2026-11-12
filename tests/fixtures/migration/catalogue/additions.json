@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "id": "ADD-I18N",
+      "status": "proposed; not implemented in TS and not part of baseline denominator",
+      "targetStage": "S4",
+      "behavior": "Runtime user-facing English/Simplified Chinese locale selection with key/parameter messages and explicit fallback; model-facing errors remain separate.",
+      "decision": "Candidate additional value for the Rust product; confirm or amend at the stage boundary before implementation.",
+      "probe": "S1 bounded locale/key/parameter fallback and user/model boundary exercise"
+    }
+  ]
+}

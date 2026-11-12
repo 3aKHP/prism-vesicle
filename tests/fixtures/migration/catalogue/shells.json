@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "source": "src/core/process/shell-profile.ts",
+  "capabilityId": "CAP-PROCESS-EXECUTION",
+  "auto": {
+    "posix": "posix-sh at /bin/sh",
+    "win32": "PowerShell7 then Windows PowerShell5.1"
+  },
+  "profiles": [
+    {
+      "id": "posix-sh",
+      "platforms": [
+        "linux",
+        "darwin"
+      ],
+      "argvPrefix": [
+        "-c"
+      ],
+      "condition": "Executable discovery succeeds; unsupported platform/profile is unavailable, no silent substitution",
+      "special": null
+    },
+    {
+      "id": "bash",
+      "platforms": [
+        "linux",
+        "darwin"
+      ],
+      "argvPrefix": [
+        "--noprofile",
+        "--norc",
+        "-c"
+      ],
+      "condition": "Executable discovery succeeds; unsupported platform/profile is unavailable, no silent substitution",
+      "special": null
+    },
+    {
+      "id": "zsh",
+      "platforms": [
+        "linux",
+        "darwin"
+      ],
+      "argvPrefix": [
+        "-f",
+        "-c"
+      ],
+      "condition": "Executable discovery succeeds; unsupported platform/profile is unavailable, no silent substitution",
+      "special": null
+    },
+    {
+      "id": "fish",
+      "platforms": [
+        "linux",
+        "darwin"
+      ],
+      "argvPrefix": [
+        "--no-config",
+        "-c"
+      ],
+      "condition": "Executable discovery succeeds; unsupported platform/profile is unavailable, no silent substitution",
+      "special": null
+    },
+    {
+      "id": "nushell",
+      "platforms": [
+        "linux",
+        "darwin",
+        "win32"
+      ],
+      "argvPrefix": [
+        "-n",
+        "-c"
+      ],
+      "condition": "Executable discovery succeeds; unsupported platform/profile is unavailable, no silent substitution",
+      "special": "Bounded startup capability probe"
+    },
+    {
+      "id": "powershell-7",
+      "platforms": [
+        "win32"
+      ],
+      "argvPrefix": [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command"
+      ],
+      "condition": "Executable discovery succeeds; unsupported platform/profile is unavailable, no silent substitution",
+      "special": null
+    },
+    {
+      "id": "windows-powershell-5.1",
+      "platforms": [
+        "win32"
+      ],
+      "argvPrefix": [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command"
+      ],
+      "condition": "Executable discovery succeeds; unsupported platform/profile is unavailable, no silent substitution",
+      "special": null
+    },
+    {
+      "id": "cmd",
+      "platforms": [
+        "win32"
+      ],
+      "argvPrefix": [
+        "/D",
+        "/S",
+        "/C"
+      ],
+      "condition": "Executable discovery succeeds; unsupported platform/profile is unavailable, no silent substitution",
+      "special": "Prefix command with chcp65001 for UTF-8 output"
+    },
+    {
+      "id": "git-bash",
+      "platforms": [
+        "win32"
+      ],
+      "argvPrefix": [
+        "--noprofile",
+        "--norc",
+        "-c"
+      ],
+      "condition": "Executable discovery succeeds; unsupported platform/profile is unavailable, no silent substitution",
+      "special": null
+    }
+  ],
+  "legacyPlanAlias": {
+    "powershell": "PowerShell7-compatible invocation for existing persisted plans"
+  },
+  "authority": "Opt-in host-user process authority; approval is not a sandbox and shell effects are not rewind-safe."
+}

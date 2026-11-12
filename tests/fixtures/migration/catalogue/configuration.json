@@ -1,0 +1,741 @@
+{
+  "schemaVersion": 1,
+  "sourceBaseline": "2bc4f9075214f72d7f930dd0dba173f1768afc2c",
+  "fields": [
+    {
+      "id": "CFG-PROVIDERS-YAML-DEFAULT-PROVIDER",
+      "file": "providers.yaml",
+      "key": "default.provider",
+      "shape": "declared provider id",
+      "default": "required",
+      "behavior": "Resolve default provider; unknown selections fail.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-DEFAULT-MODEL",
+      "file": "providers.yaml",
+      "key": "default.model",
+      "shape": "declared model id",
+      "default": "required",
+      "behavior": "Resolve default model within the selected default provider.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID",
+      "file": "providers.yaml",
+      "key": "providers.<id>",
+      "shape": "mapping",
+      "default": "required non-empty providers",
+      "behavior": "Provider identity is its YAML mapping key, not an arbitrary runtime API key.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-PROTOCOL",
+      "file": "providers.yaml",
+      "key": "providers.<id>.protocol",
+      "shape": "openai-chat-compatible | openai-responses | anthropic-messages | gemini-generate-content",
+      "default": "required",
+      "behavior": "Choose the wire adapter.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-BASEURL",
+      "file": "providers.yaml",
+      "key": "providers.<id>.baseUrl",
+      "shape": "nonempty URL string",
+      "default": "required",
+      "behavior": "Select the provider endpoint.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-APIKEYENV",
+      "file": "providers.yaml",
+      "key": "providers.<id>.apiKeyEnv",
+      "shape": "environment variable name",
+      "default": "required",
+      "behavior": "Resolve credential from sibling .env first, then process env; never inline API keys.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-AUTHMETHOD",
+      "file": "providers.yaml",
+      "key": "providers.<id>.authMethod",
+      "shape": "bearer | x-api-key | x-goog-api-key",
+      "default": "adapter default when absent",
+      "behavior": "Protocol/profile restrictions still apply; Responses rejects Google auth and permits x-api-key only for MiMo.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-USERAGENT",
+      "file": "providers.yaml",
+      "key": "providers.<id>.userAgent",
+      "shape": "single-line nonempty string",
+      "default": "branded package/runtime User-Agent",
+      "behavior": "Override outbound User-Agent; reject CR/LF injection.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-RESPONSESPROFILE",
+      "file": "providers.yaml",
+      "key": "providers.<id>.responsesProfile",
+      "shape": "six exact profiles in provider matrix",
+      "default": "required for Responses; forbidden otherwise",
+      "behavior": "Select a pinned protocol contract, never infer it from a hostname.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-RESPONSESTRANSPORT",
+      "file": "providers.yaml",
+      "key": "providers.<id>.responsesTransport",
+      "shape": "http | websocket",
+      "default": "http",
+      "behavior": "WebSocket allowed only for openai-public or codex-beta-2026-02-06; field forbidden on other protocols.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-DEFAULTMODEL",
+      "file": "providers.yaml",
+      "key": "providers.<id>.defaultModel",
+      "shape": "declared model id",
+      "default": "registry default for default provider, otherwise first model",
+      "behavior": "Provider shortcut default; explicit selected model takes priority.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models",
+      "shape": "nonempty list of id scalars or model mappings",
+      "default": "required",
+      "behavior": "Declare model inventory; nested fields apply only to structured entries.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-ID",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].id",
+      "shape": "nonempty model id without whitespace",
+      "default": "required",
+      "behavior": "Exact remote model identifier; dated DeepSeek profiles constrain IDs.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-GENERATION-TEMPERATURE",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].generation.temperature",
+      "shape": "finite number",
+      "default": "unset: omit generation override",
+      "behavior": "Wire support remains adapter/model specific.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-GENERATION-MAXTOKENS",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].generation.maxTokens",
+      "shape": "positive integer",
+      "default": "unset at registry layer; effective adapter defaults are in providers.json",
+      "behavior": "Output token request override, separate from model maximum and capability boolean.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-LIMITS-CONTEXTWINDOW",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].limits.contextWindow",
+      "shape": "positive integer",
+      "default": "unset: no configured window",
+      "behavior": "Display occupancy and activate budget checks when sufficient inputs exist.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-LIMITS-MAXOUTPUTTOKENS",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].limits.maxOutputTokens",
+      "shape": "positive integer",
+      "default": "unset",
+      "behavior": "Model ceiling metadata and fallback output reserve.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-LIMITS-AUTOCOMPACT-ENABLED",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].limits.autoCompact.enabled",
+      "shape": "boolean",
+      "default": "active unless false when block, valid threshold and contextWindow exist",
+      "behavior": "Disable automatic compact without removing limits.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-LIMITS-AUTOCOMPACT-THRESHOLD",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].limits.autoCompact.threshold",
+      "shape": "number strictly between 0 and 1",
+      "default": "unset: automatic compact inactive",
+      "behavior": "No hidden default threshold; triggers at equality.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-LIMITS-AUTOCOMPACT-RESERVEOUTPUTTOKENS",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].limits.autoCompact.reserveOutputTokens",
+      "shape": "positive integer",
+      "default": "turn maxTokens > generation.maxTokens > limits.maxOutputTokens > zero",
+      "behavior": "Explicit reserve precedes all fallbacks and must fit the window.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-WEBSEARCHDEFAULT",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].webSearchDefault",
+      "shape": "boolean",
+      "default": "false",
+      "behavior": "Session toggle default, independently gated by capability/profile/Engine tool surface.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-STREAMING",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].capabilities.streaming",
+      "shape": "boolean",
+      "default": "unset: unspecified metadata; vision/remoteCompact/builtinWebSearch require explicit true",
+      "behavior": "Advertise streaming support.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-TOOLS",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].capabilities.tools",
+      "shape": "boolean",
+      "default": "unset: unspecified metadata; vision/remoteCompact/builtinWebSearch require explicit true",
+      "behavior": "Advertise function-tool support.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-REASONINGTIER",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].capabilities.reasoningTier",
+      "shape": "boolean",
+      "default": "unset: unspecified metadata; vision/remoteCompact/builtinWebSearch require explicit true",
+      "behavior": "Advertise configurable reasoning effort.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-REASONINGCONTENT",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].capabilities.reasoningContent",
+      "shape": "boolean",
+      "default": "unset: unspecified metadata; vision/remoteCompact/builtinWebSearch require explicit true",
+      "behavior": "Advertise reasoning-content replay.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-TEMPERATURE",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].capabilities.temperature",
+      "shape": "boolean",
+      "default": "unset: unspecified metadata; vision/remoteCompact/builtinWebSearch require explicit true",
+      "behavior": "Advertise temperature control.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-MAXTOKENS",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].capabilities.maxTokens",
+      "shape": "boolean",
+      "default": "unset: unspecified metadata; vision/remoteCompact/builtinWebSearch require explicit true",
+      "behavior": "Advertise output-token control.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-VISION",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].capabilities.vision",
+      "shape": "boolean",
+      "default": "unset: unspecified metadata; vision/remoteCompact/builtinWebSearch require explicit true",
+      "behavior": "Explicit true permits admitted image inputs.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-REMOTECOMPACT",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].capabilities.remoteCompact",
+      "shape": "boolean",
+      "default": "unset: unspecified metadata; vision/remoteCompact/builtinWebSearch require explicit true",
+      "behavior": "Explicit true permits supported Responses remote compaction.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PROVIDERS-YAML-PROVIDERS-ID-MODELS-CAPABILITIES-BUILTINWEBSEARCH",
+      "file": "providers.yaml",
+      "key": "providers.<id>.models[].capabilities.builtinWebSearch",
+      "shape": "boolean",
+      "default": "unset: unspecified metadata; vision/remoteCompact/builtinWebSearch require explicit true",
+      "behavior": "Explicit true is required, with profile/Engine admission and enabled toggle, for native search.",
+      "aliases": [],
+      "source": "src/config/providers.ts",
+      "sourceHash": "352af17c039146b9d950c585ee0c2d9de25a1f12b1abbc8713f10eb544c98985"
+    },
+    {
+      "id": "CFG-PERMISSIONS-YAML-VERSION",
+      "file": "permissions.yaml",
+      "key": "version",
+      "shape": "1",
+      "default": "required when file exists",
+      "behavior": "Unknown version and keys fail.",
+      "aliases": [],
+      "source": "src/config/permissions.ts",
+      "sourceHash": "07f35aefaa6fe2fbb36f529202ab53987f5a3ea34c454d7735a76eee56ed4bc9"
+    },
+    {
+      "id": "CFG-PERMISSIONS-YAML-DEFAULTMODE",
+      "file": "permissions.yaml",
+      "key": "defaultMode",
+      "shape": "MANUAL | INERTIA | MOMENTUM",
+      "default": "MOMENTUM",
+      "behavior": "Case normalized; persisted YOLO rejected.",
+      "aliases": [],
+      "source": "src/config/permissions.ts",
+      "sourceHash": "07f35aefaa6fe2fbb36f529202ab53987f5a3ea34c454d7735a76eee56ed4bc9"
+    },
+    {
+      "id": "CFG-PERMISSIONS-YAML-SHELLEXEC",
+      "file": "permissions.yaml",
+      "key": "shellExec",
+      "shape": "boolean",
+      "default": "false",
+      "behavior": "Enable opt-in shell tool; permission mode never implies enablement.",
+      "aliases": [],
+      "source": "src/config/permissions.ts",
+      "sourceHash": "07f35aefaa6fe2fbb36f529202ab53987f5a3ea34c454d7735a76eee56ed4bc9"
+    },
+    {
+      "id": "CFG-PERMISSIONS-YAML-SHELLINTERPRETER",
+      "file": "permissions.yaml",
+      "key": "shellInterpreter",
+      "shape": "shells.json profiles",
+      "default": "auto",
+      "behavior": "Legacy powershell aliases powershell-7; unavailable platform/interpreter reports failure.",
+      "aliases": [],
+      "source": "src/config/permissions.ts",
+      "sourceHash": "07f35aefaa6fe2fbb36f529202ab53987f5a3ea34c454d7735a76eee56ed4bc9"
+    },
+    {
+      "id": "CFG-SETTINGS-YAML-VERSION",
+      "file": "settings.yaml",
+      "key": "version",
+      "shape": "1",
+      "default": "optional",
+      "behavior": "If supplied, must be version 1; unknown keys are ignored.",
+      "aliases": [],
+      "source": "src/config/settings.ts",
+      "sourceHash": "fd4d990fd8686dfd85fa20f40a3d21becf16662b8502a66cbedb9253203121d6"
+    },
+    {
+      "id": "CFG-SETTINGS-YAML-EDITOR",
+      "file": "settings.yaml",
+      "key": "editor",
+      "shape": "nonempty command string",
+      "default": "unset",
+      "behavior": "Editor resolution: VESICLE_EDITOR > settings editor > VISUAL > EDITOR > platform fallback; argv splitting, no shell.",
+      "aliases": [],
+      "source": "src/config/settings.ts",
+      "sourceHash": "fd4d990fd8686dfd85fa20f40a3d21becf16662b8502a66cbedb9253203121d6"
+    },
+    {
+      "id": "CFG-SETTINGS-YAML-SESSIONTITLE",
+      "file": "settings.yaml",
+      "key": "sessionTitle",
+      "shape": "auto | off",
+      "default": "auto",
+      "behavior": "Control independent automatic session title generation; off makes no title request.",
+      "aliases": [],
+      "source": "src/config/settings.ts",
+      "sourceHash": "fd4d990fd8686dfd85fa20f40a3d21becf16662b8502a66cbedb9253203121d6"
+    },
+    {
+      "id": "CFG--VESICLE/PREFERENCES-YAML-VERSION",
+      "file": ".vesicle/preferences.yaml",
+      "key": "version",
+      "shape": "1",
+      "default": "required for existing file",
+      "behavior": "Reject duplicate/unknown keys and symlink file; startup diagnostic falls back while edits fail closed.",
+      "aliases": [],
+      "source": "src/config/project-preferences.ts",
+      "sourceHash": "69562d4028194f4d6b9b60df61ace92df4027a73f5095e10da84957514e9af5d"
+    },
+    {
+      "id": "CFG--VESICLE/PREFERENCES-YAML-THEME",
+      "file": ".vesicle/preferences.yaml",
+      "key": "theme",
+      "shape": "dark | light | default | auto",
+      "default": "unset",
+      "behavior": "Session > launch flag > project > VESICLE_THEME > built-in default.",
+      "aliases": [],
+      "source": "src/config/project-preferences.ts",
+      "sourceHash": "69562d4028194f4d6b9b60df61ace92df4027a73f5095e10da84957514e9af5d"
+    },
+    {
+      "id": "CFG--VESICLE/PREFERENCES-YAML-MCPOUTPUTPERSISTENCE",
+      "file": ".vesicle/preferences.yaml",
+      "key": "mcpOutputPersistence",
+      "shape": "boolean",
+      "default": "false",
+      "behavior": "Persist accepted MCP output to guarded project storage when enabled.",
+      "aliases": [],
+      "source": "src/config/project-preferences.ts",
+      "sourceHash": "69562d4028194f4d6b9b60df61ace92df4027a73f5095e10da84957514e9af5d"
+    },
+    {
+      "id": "CFG--VESICLE/PREFERENCES-YAML-MCPOUTPUTAUTOTRUNCATE",
+      "file": ".vesicle/preferences.yaml",
+      "key": "mcpOutputAutoTruncate",
+      "shape": "boolean",
+      "default": "false",
+      "behavior": "Effective truncation requires both mcpOutputPersistence and this toggle; enabling it alone has no effect.",
+      "aliases": [],
+      "source": "src/config/project-preferences.ts",
+      "sourceHash": "69562d4028194f4d6b9b60df61ace92df4027a73f5095e10da84957514e9af5d"
+    },
+    {
+      "id": "CFG-QUALITY-YAML-VERSION",
+      "file": "quality.yaml",
+      "key": "version",
+      "shape": "1 | 2",
+      "default": "required; writes use 2",
+      "behavior": "Read v1 with off forbidding retained tuple, or v2 with complete dormant tuple allowed; first mutation writes v2. Unknown versions fail.",
+      "aliases": [],
+      "source": "src/config/quality.ts",
+      "sourceHash": "f9b95cfc075fb2d40ff0ee11fac765e1e4680329b1211d0380138ba133a8f4df"
+    },
+    {
+      "id": "CFG-QUALITY-YAML-MODE",
+      "file": "quality.yaml",
+      "key": "mode",
+      "shape": "off | observe | rewrite",
+      "default": "off only when file absent; required in an existing file",
+      "behavior": "Only admitted Runtime/Harness Judge turns consult the enabled policy.",
+      "aliases": [],
+      "source": "src/config/quality.ts",
+      "sourceHash": "f9b95cfc075fb2d40ff0ee11fac765e1e4680329b1211d0380138ba133a8f4df"
+    },
+    {
+      "id": "CFG-QUALITY-YAML-PROVIDERALIAS",
+      "file": "quality.yaml",
+      "key": "providerAlias",
+      "shape": "declared provider id",
+      "default": "absent when no retained tuple",
+      "behavior": "Explicit Judge provider; off may retain complete inactive tuple.",
+      "aliases": [],
+      "source": "src/config/quality.ts",
+      "sourceHash": "f9b95cfc075fb2d40ff0ee11fac765e1e4680329b1211d0380138ba133a8f4df"
+    },
+    {
+      "id": "CFG-QUALITY-YAML-MODELID",
+      "file": "quality.yaml",
+      "key": "modelId",
+      "shape": "declared model id",
+      "default": "absent when no retained tuple",
+      "behavior": "Exact Judge model, not automatic runtime-model fallback.",
+      "aliases": [],
+      "source": "src/config/quality.ts",
+      "sourceHash": "f9b95cfc075fb2d40ff0ee11fac765e1e4680329b1211d0380138ba133a8f4df"
+    },
+    {
+      "id": "CFG-QUALITY-YAML-JUDGETIMEOUTMS",
+      "file": "quality.yaml",
+      "key": "judgeTimeoutMs",
+      "shape": "integer 1000..180000",
+      "default": "15000 when creating default profile",
+      "behavior": "Timeout belongs to the complete Judge tuple; does not silently activate a Judge.",
+      "aliases": [],
+      "source": "src/config/quality.ts",
+      "sourceHash": "f9b95cfc075fb2d40ff0ee11fac765e1e4680329b1211d0380138ba133a8f4df"
+    },
+    {
+      "id": "CFG-MCP-YAML-ENABLED",
+      "file": "mcp.yaml",
+      "key": "enabled",
+      "shape": "boolean",
+      "default": "true",
+      "behavior": "Disable all configured MCP servers.",
+      "aliases": [],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID",
+      "file": "mcp.yaml",
+      "key": "servers.<id>",
+      "shape": "mapping",
+      "default": "no servers if file absent/empty",
+      "behavior": "Stable server identity; reject duplicate ids.",
+      "aliases": [],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID-ENABLED",
+      "file": "mcp.yaml",
+      "key": "servers.<id>.enabled",
+      "shape": "boolean",
+      "default": "true",
+      "behavior": "Server-level opt-in/out.",
+      "aliases": [],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID-TRANSPORT",
+      "file": "mcp.yaml",
+      "key": "servers.<id>.transport",
+      "shape": "streamable-http (http accepted as a value alias)",
+      "default": "streamable-http",
+      "behavior": "Only supported transport; stdio is not implemented.",
+      "aliases": [],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID-URL",
+      "file": "mcp.yaml",
+      "key": "servers.<id>.url",
+      "shape": "URL",
+      "default": "required",
+      "behavior": "Server endpoint used for negotiation and tools.",
+      "aliases": [],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID-HEADERS",
+      "file": "mcp.yaml",
+      "key": "servers.<id>.headers",
+      "shape": "string mapping",
+      "default": "{}",
+      "behavior": "Expand environment references from sibling .env/process, preserving secret boundary.",
+      "aliases": [],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID-TIMEOUTSECONDS",
+      "file": "mcp.yaml",
+      "key": "servers.<id>.timeoutSeconds",
+      "shape": "positive number",
+      "default": "30",
+      "behavior": "Bound request operations.",
+      "aliases": [
+        "timeout_seconds"
+      ],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID-PROTOCOLVERSION",
+      "file": "mcp.yaml",
+      "key": "servers.<id>.protocolVersion",
+      "shape": "string",
+      "default": "2025-03-26",
+      "behavior": "Legacy initialize protocol pin.",
+      "aliases": [
+        "protocol_version"
+      ],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID-NEGOTIATION",
+      "file": "mcp.yaml",
+      "key": "servers.<id>.negotiation",
+      "shape": "legacy | modern | auto",
+      "default": "legacy",
+      "behavior": "Select initialize/discover path; auto permits defined fallback only.",
+      "aliases": [],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID-SUPPORTEDPROTOCOLVERSIONS",
+      "file": "mcp.yaml",
+      "key": "servers.<id>.supportedProtocolVersions",
+      "shape": "nonempty list of valid dates",
+      "default": "[2026-07-28]",
+      "behavior": "Filter to supported modern revisions; empty/no shared supported revision fails.",
+      "aliases": [
+        "supported_protocol_versions"
+      ],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID-TOOLPREFIX",
+      "file": "mcp.yaml",
+      "key": "servers.<id>.toolPrefix",
+      "shape": "string",
+      "default": "derived runtime server prefix",
+      "behavior": "Stable tool alias prefix.",
+      "aliases": [
+        "tool_prefix"
+      ],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID-INCLUDETOOLS",
+      "file": "mcp.yaml",
+      "key": "servers.<id>.includeTools",
+      "shape": "list",
+      "default": "[] (no inclusion restriction)",
+      "behavior": "Filter remote tools before exposure.",
+      "aliases": [
+        "include_tools",
+        "allowedTools",
+        "allowed_tools"
+      ],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID-EXCLUDETOOLS",
+      "file": "mcp.yaml",
+      "key": "servers.<id>.excludeTools",
+      "shape": "list",
+      "default": "[]",
+      "behavior": "Exclude listed remote tools.",
+      "aliases": [
+        "exclude_tools"
+      ],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    },
+    {
+      "id": "CFG-MCP-YAML-SERVERS-ID-ENABLEDENGINES",
+      "file": "mcp.yaml",
+      "key": "servers.<id>.enabledEngines",
+      "shape": "Engine-id list",
+      "default": "[] (all otherwise admitted engines)",
+      "behavior": "Limit server tools to eligible Engines.",
+      "aliases": [
+        "enabled_engines"
+      ],
+      "source": "src/mcp/config.ts",
+      "sourceHash": "32bb19fa96e2da2048ae8a817c77963f7d716a0d7571f1f6eb0c6d2b250daca3"
+    }
+  ],
+  "precedence": {
+    "directory": [
+      "dirname(VESICLE_PROVIDERS_FILE)",
+      "VESICLE_CONFIG_DIR",
+      "VESICLE_HOST_CONFIG_DIR (host-injected filtered Skill child only)",
+      "APPDATA/prism-vesicle",
+      "XDG_CONFIG_HOME/prism-vesicle",
+      "homedir/.config/prism-vesicle"
+    ],
+    "credential": [
+      "sibling .env",
+      "process env"
+    ],
+    "providerSelection": [
+      "explicit selection",
+      "registry default"
+    ],
+    "modelSelection": [
+      "explicit model",
+      "provider.defaultModel",
+      "registry default model when default provider",
+      "first model otherwise"
+    ],
+    "proxy": [
+      "nonempty user-file VESICLE_PROVIDER_PROXY",
+      "nonempty process VESICLE_PROVIDER_PROXY",
+      "target-scheme inherited http(s)_proxy/HTTP(S)_PROXY with NO_PROXY",
+      "direct"
+    ],
+    "theme": [
+      "session override",
+      "launch dark/light flag",
+      "project preference",
+      "VESICLE_THEME",
+      "default"
+    ],
+    "editor": [
+      "VESICLE_EDITOR",
+      "settings.editor",
+      "VISUAL",
+      "EDITOR",
+      "platform fallback"
+    ],
+    "perFileOverrides": [
+      "VESICLE_PROVIDERS_FILE replaces providers.yaml and determines its sibling configuration directory",
+      "VESICLE_MCP_FILE replaces only mcp.yaml",
+      "VESICLE_PERMISSIONS_FILE replaces only permissions.yaml",
+      "VESICLE_QUALITY_FILE replaces only quality.yaml",
+      "settings.yaml has no separate file override"
+    ]
+  },
+  "boundaries": [
+    "providers.yaml inline apiKey is explicitly rejected, not a supported field.",
+    "Registry path/source, exists/path/diagnostic result fields, API key values and resolved adapter objects are runtime metadata, not serializable config keys.",
+    "MCP add-entry JSON auth/headerName/name fields are authoring inputs transformed into headers/env placeholders, not new mcp.yaml runtime fields.",
+    "Asset and Skill managed state are inventoried with profiles and durable resources; they are not arbitrary user-setting keys.",
+    "All defaults are TS baseline facts; absent capabilities must not be mechanically converted to true or false across every protocol.",
+    "Inherited proxy lowercase variables precede uppercase per target scheme; NO_PROXY precedes no_proxy. ALL_PROXY is ignored. Explicit VESICLE_PROVIDER_PROXY is not bypassed by NO_PROXY."
+  ]
+}
