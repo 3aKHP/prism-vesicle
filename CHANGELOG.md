@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **Rust dual-era MCP development probe.** A pinned official SDK exercises simultaneous legacy and modern loopback connections, wire metadata, tool/protocol errors, cancellation followed by further requests, and rejection of redirects/replays on Linux and native Windows. An explicit live lane reuses configured authentication for bounded read-only acceptance and records only sanitized evidence. The probe remains separate from the product runtime.
+
 - **Rust persisted identity and attachment checks.** Read-only inspection now retains the effective Harness migration and frozen Skill catalog across older branch heads, with required-record failures and optional-snapshot tolerance matching TS. The separate `verify-attachments` development command validates bounded content-addressed image references, size, SHA-256 and media signatures, rejects directory links/reparse points, and leaves originals unchanged. This does not perform migration, restore files or materialize provider image data.
 
 - **Read-only Rust session inspection.** The development CLI can inspect a bounded legacy or branched JSONL file, select an ancestor chain and read physical-order host preferences while preserving opaque metadata and attachment references. Unsupported record kinds fail explicitly; it neither resumes nor writes sessions, verifies attachment bytes, or restores files. Native Linux/Windows checks compare the supported subset with TS and preserve the original fixture tree.
